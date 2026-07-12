@@ -1,10 +1,6 @@
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
-const schemaPath = fileURLToPath(new URL('../../schema/aep.v1.schema.json', import.meta.url));
-const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
+import { aepSchema as schema } from './schema.mjs';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);

@@ -76,10 +76,13 @@ Antes disso, quem decidia o que entrava em cada prompt era o `orchestrator.mjs`,
 - [x] `orchestrator.mjs` refatorado: cada `ACTION` agora só define `baseInstruction(doc)` (o que perguntar), não mais um `buildPrompt` completo — montagem final é `buildPrompt({ objective: action.baseInstruction(doc), context: contextEngine.gather(...) })`
 - [x] Validado com chamada real: pipeline completo rodou (`Document valid: true`), e `ContextEngine.gather()` testado isoladamente confirma que lista os arquivos reais do diretório de teste e recupera tarefas parecidas de execuções anteriores desta sessão
 
-### 4. Pipeline declarativo / Action Registry
-- [ ] Extrair `ACTIONS` de `src/orchestrator.mjs` pra um registry externo (mesmo padrão de `src/agents/registry.mjs`)
-- [ ] Orchestrator passa a só executar etapas nomeadas — não conhece mais `analyze`/`review`/`refine` diretamente
-- [ ] Abre caminho pra novos step-types (`consensus`, `securityReview`, `documentationReview`) sem tocar no núcleo
+### 4. Pipeline declarativo / Action Registry ✅ concluído — 2026-07-12
+- [x] `ACTIONS` extraído de `src/orchestrator.mjs` pra `src/actions/registry.mjs`, mesmo padrão de `src/agents/registry.mjs` — um arquivo por ação (`analyze.mjs`, `review.mjs`, `refine.mjs`)
+- [x] `orchestrator.mjs` não conhece mais `analyze`/`review`/`refine` diretamente — só chama `resolveAction(step.action)`; cada ação só declara `baseInstruction(doc)`, `jsonSchema`/`defName` opcionais, `validate` opcional e `merge`
+- [x] Loader de schema compartilhado (`src/aep/schema.mjs`) extraído — antes `validate.mjs` e as ações leriam o mesmo arquivo JSON separadamente
+- [x] Abre caminho pra novos step-types (`consensus`, `securityReview`, `documentationReview`) sem tocar no orchestrator — só adicionar um arquivo em `src/actions/`
+- [x] Removida uma linha de código morto encontrada durante a extração (`analyze`'s `validate` chamava `parseAndValidateSection` e descartava o resultado sem usar)
+- [x] Validado: `resolveAction('doesNotExist')` lança erro claro listando ações conhecidas; pipeline completo rodado com chamada real (`Document valid: true`, refinamento com 1 aceito/1 rejeitado)
 
 ### 5. Pipeline Profiles (presets nomeados)
 Já desenhado como eixo ortogonal a Workspace desde a Fase 4 — só faltou criar os arquivos de verdade. Precisa vir antes do Intent Analyzer (item 6): não dá pra rotear entre pipelines que ainda não existem.

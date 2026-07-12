@@ -133,7 +133,9 @@ const result = await manager.run(claudeAgent, {
 
 Three actions exist: `analyze` (implementer produces `analysis` + `plan` in one call), `review` (a reviewer produces its `review` section), `refine` (implementer reads all reviews and produces `refinement`). A `parallel` block runs its steps concurrently via `Promise.all` — proven with real wall-clock timing (three reviewers finishing in ~63s total, not three times that).
 
-Each `ACTION` only defines a `baseInstruction(doc)` — what to ask. It does not decide what context comes with it (that's the Context Engine, below) or how to format the final prompt string (that's `PromptBuilder`, shared with the Language Engine). `runStep` composes all three: `buildPrompt({ objective: action.baseInstruction(doc), context: contextEngine.gather(...) })`.
+Each action only defines a `baseInstruction(doc)` — what to ask. It does not decide what context comes with it (that's the Context Engine, below) or how to format the final prompt string (that's `PromptBuilder`, shared with the Language Engine). `runStep` composes all three: `buildPrompt({ objective: action.baseInstruction(doc), context: contextEngine.gather(...) })`.
+
+Actions themselves live in `src/actions/` — one file per action (`analyze.mjs`, `review.mjs`, `refine.mjs`) — and `src/actions/registry.mjs` maps a name to an implementation, exactly mirroring `src/agents/registry.mjs`'s pattern. `orchestrator.mjs` itself has no idea `analyze`/`review`/`refine` exist; it only calls `resolveAction(step.action)`. Adding a new action (`securityReview`, `documentationReview`, a future `consensus` step) means adding one file here, never touching the orchestrator.
 
 **Graceful degradation is load-bearing, not incidental.** If one reviewer's output fails validation, `applyOutcome` simply doesn't merge that section — the pipeline continues, and the final document is still schema-valid without it. This was observed directly: MimoCode failed validation in one real run and the pipeline finished normally anyway.
 
