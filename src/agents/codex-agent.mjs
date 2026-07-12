@@ -44,7 +44,7 @@ export const codexAgent = {
       return { ok: false, raw: null, error: 'no agent_message event found in codex --json stream', rawResult: r };
     }
 
-    return { ok: true, raw, meta: { ms: r.ms }, rawResult: r };
+    return { ok: true, raw, meta: { ms: r.ms, tokens: extractTokenUsage(r.stdout) }, rawResult: r };
   },
 
   cancel() {},
@@ -61,6 +61,28 @@ function extractLastAgentMessage(stdout) {
       if (evt.item?.type === 'agent_message' && typeof evt.item.text === 'string') return evt.item.text;
     } catch {
       // not a parseable line, keep scanning backward
+    }
+  }
+  return null;
+}
+
+// The last {"type":"turn.completed","usage":{...}} event carries real token
+// counts for the whole turn — confirmed shape against codex-cli 0.144.1.
+function extractTokenUsage(stdout) {
+  const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try {
+      const evt = JSON.parse(lines[i]);
+      if (evt.type === 'turn.completed' && evt.usage) {
+        return {
+          input: evt.usage.input_tokens ?? null,
+          output: evt.usage.output_tokens ?? null,
+          cacheRead: evt.usage.cached_input_tokens ?? null,
+          reasoning: evt.usage.reasoning_output_tokens ?? null,
+        };
+      }
+    } catch {
+      // keep scanning backward
     }
   }
   return null;

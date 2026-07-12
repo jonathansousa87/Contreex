@@ -49,7 +49,19 @@ export const claudeAgent = {
     return {
       ok: true,
       raw: outer.result,
-      meta: { ms: r.ms, costUsd: outer.total_cost_usd ?? null, sessionId: outer.session_id ?? null },
+      meta: {
+        ms: r.ms,
+        costUsd: outer.total_cost_usd ?? null,
+        sessionId: outer.session_id ?? null,
+        tokens: outer.usage
+          ? {
+              input: outer.usage.input_tokens ?? null,
+              output: outer.usage.output_tokens ?? null,
+              cacheRead: outer.usage.cache_read_input_tokens ?? null,
+              cacheCreate: outer.usage.cache_creation_input_tokens ?? null,
+            }
+          : null,
+      },
       rawResult: r,
     };
   },

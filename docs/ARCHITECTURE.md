@@ -180,6 +180,18 @@ Named presets — `fast`, `standard`, `review`, `critical`, `enterprise`, `analy
 
 Deliberately keyed on the prompt text, not the worktree `cwd` (a meaningless random `mkdtemp` path) — this assumes the prompt already encodes everything relevant, true for every action that exists today since they all embed the plan/reviews JSON directly in the prompt text.
 
+### Token economy — real findings, not aspirational claims
+
+`scripts/token-economy-report.mjs` measures what actually saves tokens/cost today, following the same "no decorative metrics" rule as ROADMAP.md item 7. Run it yourself; here's what it found (2026-07-12, this environment):
+
+- **Cache is the only proven real saving.** A repeated identical call: first run cost `$0.058` (Claude), second run — a cache hit — cost `$0` and used zero additional tokens. Confirmed with `meta.tokens`/`meta.costUsd` now captured from the raw CLI output (`claude-agent.mjs`, `codex-agent.mjs`).
+- **RTK compression (`compress.mjs`) has zero consumers anywhere in the live pipeline** — confirmed by grepping for its exports outside its own file and the Phase 6/token-economy demo scripts. It's proven in isolation (99.3% smaller, see Phase 6) but delivers 0% real savings today because nothing calls it during an actual run.
+- **The Prompt Optimizer is a complete no-op without `OPENROUTER_API_KEY`** — verified directly: `optimize()` returned input and output as byte-identical strings. In this environment it costs nothing and saves nothing, because it doesn't run at all. Its real effect on token count (could plausibly increase it — "clarifying" a prompt is not the same as shortening it) has never been measured with a real key.
+- **The Context Engine's own overhead is genuinely small**: a real `gather()` call returned 618 characters of context that became a 621-character final prompt — 3 characters of formatting overhead.
+- **Unexpected finding**: comparing real token usage for the same task, Codex reported 37,175 input tokens against Claude's 6 "new" input tokens (with 64,514 absorbed by Anthropic's own prompt cache). The dominant cost driver per call is each CLI's own baseline overhead (system prompt, tool definitions) — something Contreex's context/compression work does not and cannot control, since it's internal to each wrapped CLI.
+
+Honest summary: today, "this product saves tokens" is true in exactly one situation (repeated identical calls, via cache) and not yet true anywhere else the architecture claims to help.
+
 ## MCP Gateway
 
 `src/mcp-gateway.mjs` does **not** reimplement the MCP protocol — that would duplicate mature, existing client/server implementations for no benefit. It does exactly one thing: given a workspace's `mcp` allowlist (from the config cascade), it filters `~/.contreex/mcp-servers/<name>.json` definitions down to only the allowed ones and emits a standard `{ mcpServers: {...} }` config file for a CLI's own native `--mcp-config` flag to consume. A server listed in the workspace but with no definition file yet is reported (`missing: [...]`), not fatal — this is the actual enforcement point: an agent running in the `home` workspace is structurally incapable of being handed the `corporate` workspace's Jira/Confluence servers, because the gateway never puts them in its generated config.

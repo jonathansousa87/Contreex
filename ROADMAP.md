@@ -107,6 +107,9 @@ Os dados já existem (`agentStats()`, `doc.logs`, `doc.metrics`, `analysis.confi
 - [ ] Flags `--verbose` / `--show-reviews` — expõe o debate completo entre os revisores e as divergências resolvidas pelo implementer; sem a flag, só o consolidado
 - [ ] Divergências entre revisores (quando um revisor discorda e o implementer decide) já existem nos dados (`doc.reviews` + `doc.refinement.rejectedChanges`) — só falta destacar isso na saída formatada
 - [ ] Web UI/Dashboard fica **fora de escopo até decisão explícita** — tensiona com a restrição original "roda sempre no terminal", não é assumir por conta própria
+- [x] **Uso real de tokens capturado** (2026-07-12) — `claude-agent.mjs`/`codex-agent.mjs` agora extraem `meta.tokens` (input/output/cache) do JSON/JSONL bruto de cada chamada. `scripts/token-economy-report.mjs` mede o que realmente economiza tokens hoje: **só o cache** (comprovado — US$0,058 na 1ª chamada, US$0 na repetição). RTK e Prompt Optimizer estão construídos mas **sem efeito real hoje** — RTK sem consumidor no pipeline, Optimizer em no-op total sem `OPENROUTER_API_KEY`. Achado: overhead de base de cada CLI (ex.: Codex reportou 37k tokens de input contra 6 do Claude no mesmo prompt) pesa mais que qualquer contexto que a gente manda — algo fora do controle do Contreex. Detalhe completo em `docs/ARCHITECTURE.md#token-economy--real-findings-not-aspirational-claims`
+- [ ] Conectar `compress.mjs` (RTK) a um consumidor real — só faz sentido quando a ação `implement` (item 14) existir e houver diff de verdade pra comprimir; hoje é código morto do ponto de vista de economia
+- [ ] Testar o Prompt Optimizer com uma `OPENROUTER_API_KEY` real — hoje não sabemos se ele de fato reduz tokens ou se só "melhora clareza" às custas de mais texto
 
 ### 8. Event Bus
 Barato — `node:events` já resolve, sem dependência nova.
