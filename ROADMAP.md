@@ -11,7 +11,9 @@ Language Engine     (PT-BR ⇄ EN, technical dictionary, prompt optimization)
    ↓
 Context Engine      (decides what context goes in: files, memory, Knowledge Base, RTK compression)
    ↓
-Pipeline Engine     (declarative steps, not hardcoded actions)
+Intent Analyzer     (classifies what was actually asked: analyze / plan / implement / review-code)
+   ↓
+Pipeline Engine     (declarative steps, selects the right profile based on intent)
    ↓
 Consensus Engine    (pluggable strategies: unanimity, majority, implementer-decides, weighted)
    ↓
@@ -79,46 +81,61 @@ Antes disso, quem decidia o que entrava em cada prompt era o `orchestrator.mjs`,
 - [ ] Orchestrator passa a só executar etapas nomeadas — não conhece mais `analyze`/`review`/`refine` diretamente
 - [ ] Abre caminho pra novos step-types (`consensus`, `securityReview`, `documentationReview`) sem tocar no núcleo
 
-### 5. Event Bus
+### 5. Pipeline Profiles (presets nomeados)
+Já desenhado como eixo ortogonal a Workspace desde a Fase 4 — só faltou criar os arquivos de verdade. Precisa vir antes do Intent Analyzer (item 6): não dá pra rotear entre pipelines que ainda não existem.
+- [ ] `fast` / `standard` / `review` / `critical` / `enterprise` como pipelines YAML prontos em `docs/examples/` ou `~/.contreex/pipelines/`
+- [ ] Incluir explicitamente um preset **analysis-only** (só `analyze` + `review`, sem `refine`/`implement`) — é o que resolve o problema descrito no item 6
+
+### 6. Intent Analyzer
+**Adicionado em 2026-07-12, a partir de um caso real**: um pedido de "analise essas duas aplicações" não deveria poder resultar em implementação — hoje o pipeline é fixo (sempre `analyze → review → refine`) independente do que foi pedido. Isso é uma questão de comportamento correto, não estética: a ferramenta não pode tomar decisões que não foram solicitadas.
+- [ ] Classifica a intenção do pedido: `analyze` / `plan` / `implement` / `review-code`
+- [ ] Fallback barato por palavra-chave (sem custo, sem IA) — ex.: "analise"/"revise" → modo análise; "crie um plano" → modo planejamento; "implemente"/"corrija" → modo implementação
+- [ ] Classificador opcional via LLM pra casos ambíguos, reaproveitando a mesma infraestrutura plugável do `PromptOptimizer` (item 2) — mesmo princípio de degradação graciosa: sem chave de API, cai pro fallback por palavra-chave, nunca falha o pipeline
+- [ ] Seleciona automaticamente o preset certo dentre os criados no item 5
+- [ ] Quando a intenção for `analyze`, o resultado final deve incluir **perguntas de esclarecimento** quando faltar informação pra um plano confiável (ex.: "a API já está disponível?", "existe documentação funcional?") — não forçar uma resposta completa quando os dados são insuficientes
+
+### 7. Saída/relatório consolidado em terminal
+Os dados já existem (`agentStats()`, `doc.logs`, `doc.metrics`, `analysis.confidence`) — falta é apresentação. **Princípio de design (2026-07-12)**: a saída final deve ler como um relatório técnico consolidado de uma equipe de arquitetos, não como uma conversa com IA — o usuário não precisa ver o debate entre os revisores no uso normal.
+- [ ] Visão tipo tabela/relatório formatada no `console` (caixas, seções), consistente com a restrição "roda sempre no terminal" — **nenhum número exibido pode ser decorativo**; se não temos como calcular de verdade (ex.: "qualidade da tradução: 97%"), não mostra
+- [ ] Flags `--verbose` / `--show-reviews` — expõe o debate completo entre os revisores e as divergências resolvidas pelo implementer; sem a flag, só o consolidado
+- [ ] Divergências entre revisores (quando um revisor discorda e o implementer decide) já existem nos dados (`doc.reviews` + `doc.refinement.rejectedChanges`) — só falta destacar isso na saída formatada
+- [ ] Web UI/Dashboard fica **fora de escopo até decisão explícita** — tensiona com a restrição original "roda sempre no terminal", não é assumir por conta própria
+
+### 8. Event Bus
 Barato — `node:events` já resolve, sem dependência nova.
 - [ ] `EventEmitter` central
 - [ ] Eventos: `BeforeAgentRun`, `AfterAgentRun`, `ReviewAccepted`, `ReviewRejected`, `RetryStarted`, `QuotaExceeded`, `PipelineFinished`
 - [ ] `doc.logs.push(...)` atual migra pra virar um listener do bus, não lógica embutida no orchestrator
 
-### 6. Pipeline Profiles (presets nomeados)
-Já desenhado como eixo ortogonal a Workspace desde a Fase 4 — só faltou criar os arquivos de verdade.
-- [ ] `fast` / `standard` / `review` / `critical` / `enterprise` como pipelines YAML prontos em `docs/examples/` ou `~/.contreex/pipelines/`
-
-### 7. Knowledge Base
+### 9. Knowledge Base
 Diferente de Decision Memory (Fase 7): aquilo é estatística de execução, isso é conhecimento curado e permanente.
 - [ ] Módulo separado — ex.: "Codex costuma perder bug de concorrência em código async", "Claude ignora o parâmetro X sob condição Y"
 - [ ] Definir mecanismo de promoção: entrada manual, ou detecção automática de padrão repetido na Decision Memory?
 
-### 8. Consensus Engine
+### 10. Consensus Engine
 Hoje "refine" é uma chamada única do implementer decidindo tudo via prompt — funciona, mas não é uma estratégia, é um comportamento fixo.
 - [ ] Desacoplar do step `refine` atual
 - [ ] Estratégias plugáveis: unanimidade, maioria, implementer decide, weighted, corporate policy
 - [ ] Provavelmente vira um step-type novo dentro do pipeline declarativo (item 4), não um módulo isolado
 
-### 9. MCP como Capability
+### 11. MCP como Capability
 Evolução do `src/mcp-gateway.mjs` existente, não reescrita — ele já filtra por workspace, falta formalizar a indireção.
 - [ ] Agente pede uma capability ("Git", "Filesystem"), o Workspace resolve qual provider atende — o agente nunca conhece o servidor MCP diretamente
 
-### 10. Capability Discovery (contrato expandido)
+### 12. Capability Discovery (contrato expandido)
 - [ ] Expandir `capabilities()` de cada plugin com booleans: `supportsJson`, `supportsMcp`, `supportsImages`, `supportsToolCalling`, `supportsStreaming`, `supportsPatch`, `supportsReadOnly`, `supportsSandbox`
 - [ ] Sem lógica de auto-decisão no pipeline ainda baseada nisso — só o contrato, até existir um cenário real que precise
 
-### 11. Concorrência global (não Scheduler completo)
+### 13. Concorrência global (não Scheduler completo)
 - [ ] Limite de processos de agente simultâneos dentro do `AgentManager` — problema real, resolução barata
 - [ ] Fila/prioridade/execução distribuída ficam fora de escopo até existir mais de um pipeline rodando ao mesmo tempo de verdade
 
-### 12. Observabilidade em terminal
-Os dados já existem (`agentStats()`, `doc.logs`, `doc.metrics`) — falta é apresentação.
-- [ ] Visão tipo tabela/timeline renderizada no `console`, consistente com a restrição "roda sempre no terminal"
-- [ ] Web UI/Dashboard fica **fora de escopo até decisão explícita** — tensiona com essa restrição original, não é assumir por conta própria
-
-## Adiado indefinidamente (over-engineering para o estágio atual)
+## Adiado indefinidamente (over-engineering ou escopo especulativo para o estágio atual)
 
 - [ ] Scheduler completo (fila, prioridade, execução distribuída) — não existe ainda um cenário de múltiplos pipelines concorrentes que justifique
 - [ ] Agent Registry instalável via npm, estilo extensões do VSCode (`manifest.json` + `activate()`/`deactivate()`) — falta um autor externo real pra validar esse contrato antes de formalizá-lo
-- [ ] Web UI / Dashboard — ver item 12
+- [ ] Web UI / Dashboard — ver item 7
+- [ ] Geração de ADR (Architecture Decision Record) a partir do resultado do pipeline
+- [ ] Exportação de documentação técnica gerada
+- [ ] Exportação de Issues do GitHub a partir do plano de implementação
+- [ ] Modo interativo (REPL) além do comando único `contreex "<objetivo>"`
