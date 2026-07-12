@@ -18,6 +18,7 @@ This document explains what Contreex is built from, why each piece exists, and �
 - [Compression (RTK-style)](#compression-rtk-style)
 - [Memory Engine](#memory-engine)
 - [Language Engine](#language-engine)
+- [Intent Analyzer](#intent-analyzer)
 - [Findings and gotchas per CLI](#findings-and-gotchas-per-cli)
 - [Development log](#development-log)
 
@@ -206,6 +207,18 @@ The first and last component in the request/response path — see the target arc
 `bin/contreex.mjs` is the only current caller: it reads `language` from the resolved config cascade (default `{input: en-US, internal: en-US, output: en-US}`, i.e. no translation at all unless configured), calls `toInternal()` on the objective before handing it to `runOrchestrator`, and `toOutput()` on the final summary before printing it. The AEP document itself records `request.language: {input, internal, output}` for provenance — the schema's `request` `$def` was extended from a flat `language: string` to this object shape.
 
 Validated with a real round trip through the CLI: `"Adicione uma função isPalindrome no arquivo utils.js, que ignora maiúsculas e espaços."` translated to `"Add a isPalindrome function in the utils.js file, which ignores capital letters and spaces."` — `isPalindrome` and `utils.js` preserved exactly — ran the full pipeline, and the final summary came back in Portuguese (`Documento válido: verdadeiro`).
+
+## Intent Analyzer
+
+Found through a real scenario, not speculation: a request like "analyze these two applications" must never come back looking like the tool made an implementation decision nobody asked for. Before this existed, the pipeline was fixed regardless of what was actually asked.
+
+`src/intent-analyzer.mjs`'s `classifyIntent(text, {optimizer})` runs on the **raw, untranslated** objective — `classifyByKeyword()` checks PT-BR/EN keyword patterns in order of specificity (`implement` before `plan` before `review-code` before `analyze`, so a message that mentions several verbs doesn't get misclassified toward the safest-sounding one). This needs no network call by default. If nothing matches, and an `optimizer` was supplied (reusing the exact same `openRouterOptimizer` from the Language Engine's `PromptOptimizer` — no separate provider abstraction was built for this), it asks the LLM to classify; without a configured API key or on an unrecognized answer, it falls through to a default of `plan` — deliberately neither `analysis-only` (would under-deliver on a real request) nor `implement`-level thoroughness (would over-deliver on one that wasn't asked for).
+
+`profileForIntent()` maps the classified intent to one of the Pipeline Profiles: `analyze`/`review-code` → `analysis-only`, `plan` → `review`, `implement` → `critical`. `bin/contreex.mjs` only runs this when the config cascade didn't already set `pipelineProfile:` explicitly — an explicit choice always wins over inference.
+
+Honest limitation: classifying intent as `implement` still doesn't cause any code to actually get written — there is no code-writing pipeline action yet (see README "Known limitations"). It just runs the most thorough analysis/review/refine preset available today.
+
+A second, related fix shipped alongside this: the `analyze` action's `analysis` output can now include `clarifyingQuestions` — filled only when there's genuinely not enough information for a confident plan, never invented for their own sake. Verified directly: a real run of the exact migration scenario that motivated this whole feature (`"Analise essas duas aplicações..."`, C#/.NET legacy vs. a refactored Java version) correctly classified as `analyze` (despite the message also containing words like "desacoplar"/"migrar" that could read as implementation verbs), routed to `analysis-only` — no `refine` step ran, so no decision was made — and the Context Engine's real file listing (only a placeholder `README.md` existed in the test project) led the model to ask genuinely relevant clarifying questions instead of inventing a plan from nothing.
 
 ## Findings and gotchas per CLI
 

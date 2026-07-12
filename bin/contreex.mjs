@@ -9,6 +9,9 @@ import { resolveConfig, NoProfileError, UnknownWorkspaceError } from '../src/con
 import { resolveRoles } from '../src/agents/registry.mjs';
 import { runOrchestrator } from '../src/orchestrator.mjs';
 import { LanguageEngine } from '../src/language/engine.mjs';
+import { classifyIntent, profileForIntent } from '../src/intent-analyzer.mjs';
+import { loadPipelineProfile, UnknownPipelineProfileError } from '../src/config/pipeline-profiles.mjs';
+import { openRouterOptimizer } from '../src/language/prompt-optimizer.mjs';
 
 const DEFAULT_LANGUAGE = { input: 'en-US', internal: 'en-US', output: 'en-US' };
 
@@ -26,6 +29,11 @@ parents (like .git). See docs/examples/contreex-profile.yaml for a template.
 The objective's language is read from the resolved config's "language"
 section (default: English, no translation). Set "language.input: pt-BR" to
 write objectives in Portuguese — see docs/examples/global-config.yaml.
+
+Unless "pipelineProfile:" is set explicitly in your config, the pipeline is
+chosen automatically based on what you actually asked for — an
+analysis-only request never turns into an unrequested implementation. See
+docs/examples/pipelines/ for the available profiles.
 
 Example:
   contreex "Add isPalindrome(str) to utils.js"`);
@@ -48,6 +56,10 @@ function parseArgs(argv) {
 function buildSummary(doc, documentValid) {
   const lines = ['=== Summary ==='];
   if (doc.analysis) lines.push(`Problem: ${doc.analysis.problem}`);
+  if (doc.analysis?.clarifyingQuestions?.length) {
+    lines.push('Clarifying questions before a confident plan is possible:');
+    for (const q of doc.analysis.clarifyingQuestions) lines.push(`  - ${q}`);
+  }
   if (doc.plan) lines.push(`Plan: ${doc.plan.steps.length} step(s)`);
 
   const reviews = Object.entries(doc.reviews ?? {});
@@ -89,6 +101,23 @@ async function main() {
     throw e;
   }
 
+  // An explicit "pipelineProfile:" anywhere in the config cascade always
+  // wins — auto-classification only kicks in when nothing was configured.
+  // Runs on the raw, untranslated objective: the keyword fallback works in
+  // whatever language the user typed, no network call needed by default.
+  let pipeline = resolved.config.pipeline;
+  if (!resolved.config.pipelineProfile) {
+    const { intent, method } = await classifyIntent(args.objective, { optimizer: openRouterOptimizer });
+    const profile = profileForIntent(intent);
+    console.log(`intent: ${intent} (${method}) -> pipeline profile: ${profile}`);
+    try {
+      pipeline = loadPipelineProfile(profile);
+    } catch (e) {
+      if (!(e instanceof UnknownPipelineProfileError)) throw e;
+      console.error(`contreex: ${e.message} — falling back to the configured pipeline.`);
+    }
+  }
+
   const language = { ...DEFAULT_LANGUAGE, ...(resolved.config.language ?? {}) };
   const translating = language.input !== language.internal;
 
@@ -112,7 +141,7 @@ async function main() {
   const { doc, documentValid } = await runOrchestrator({
     projectDir: resolved.projectRoot,
     objective,
-    pipeline: resolved.config.pipeline,
+    pipeline,
     roles,
     language: translating ? language : undefined,
   });

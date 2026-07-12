@@ -24,7 +24,7 @@ function normalizeFallback(raw) {
 export const analyzeAction = {
   role: 'implementer',
   baseInstruction: (doc) =>
-    `You are the implementer. Objective: ${doc.request.objective}\nReply with ONLY a JSON object (no prose, no markdown fences) with two keys: "analysis" (problem/rootCause/risks/assumptions/confidence) and "plan" (steps: array of {id, description}).`,
+    `You are the implementer. Objective: ${doc.request.objective}\nReply with ONLY a JSON object (no prose, no markdown fences) with two keys: "analysis" (problem/rootCause/risks/assumptions/confidence, plus "clarifyingQuestions": an array of specific questions ONLY if there's genuinely not enough information here to produce a confident plan — leave it an empty array otherwise, don't invent questions for their own sake) and "plan" (steps: array of {id, description}).`,
   jsonSchema: ANALYZE_SCHEMA,
   validate: (raw) => {
     // analyze produces one combined object; validate the whole thing against

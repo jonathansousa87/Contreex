@@ -91,13 +91,15 @@ Já desenhado como eixo ortogonal a Workspace desde a Fase 4 — só faltou cria
 - [x] `src/config/pipeline-profiles.mjs` (`loadPipelineProfile`) + integração em `src/config/load.mjs`: `pipelineProfile: <nome>` em qualquer camada da cascata sobrescreve o `pipeline:` resolvido — sem isso, comportamento inalterado
 - [x] Validado: os 6 presets carregam com a contagem de steps esperada, perfil desconhecido lança `UnknownPipelineProfileError` claro, e uma chamada real com `pipelineProfile: fast` rodou só `analyze` (sem `Reviews:`/`Refinement:` na saída, exatamente como o preset define)
 
-### 6. Intent Analyzer
-**Adicionado em 2026-07-12, a partir de um caso real**: um pedido de "analise essas duas aplicações" não deveria poder resultar em implementação — hoje o pipeline é fixo (sempre `analyze → review → refine`) independente do que foi pedido. Isso é uma questão de comportamento correto, não estética: a ferramenta não pode tomar decisões que não foram solicitadas.
-- [ ] Classifica a intenção do pedido: `analyze` / `plan` / `implement` / `review-code`
-- [ ] Fallback barato por palavra-chave (sem custo, sem IA) — ex.: "analise"/"revise" → modo análise; "crie um plano" → modo planejamento; "implemente"/"corrija" → modo implementação
-- [ ] Classificador opcional via LLM pra casos ambíguos, reaproveitando a mesma infraestrutura plugável do `PromptOptimizer` (item 2) — mesmo princípio de degradação graciosa: sem chave de API, cai pro fallback por palavra-chave, nunca falha o pipeline
-- [ ] Seleciona automaticamente o preset certo dentre os criados no item 5
-- [ ] Quando a intenção for `analyze`, o resultado final deve incluir **perguntas de esclarecimento** quando faltar informação pra um plano confiável (ex.: "a API já está disponível?", "existe documentação funcional?") — não forçar uma resposta completa quando os dados são insuficientes
+### 6. Intent Analyzer ✅ concluído — 2026-07-12
+**Adicionado a partir de um caso real**: um pedido de "analise essas duas aplicações" não deveria poder resultar em implementação — antes disso o pipeline era fixo, independente do que foi pedido. Questão de comportamento correto, não estética.
+- [x] `src/intent-analyzer.mjs` — classifica a intenção do pedido: `analyze` / `plan` / `implement` / `review-code`
+- [x] Fallback barato por palavra-chave PT-BR/EN (`classifyByKeyword`, sem custo, sem IA) — checado sobre o texto bruto do objetivo, antes da tradução, ordem por especificidade (`implement` antes de `plan` antes de `review-code` antes de `analyze`)
+- [x] Classificador opcional via LLM pra casos ambíguos, reaproveitando o **mesmo** `openRouterOptimizer` do `PromptOptimizer` (item 2) — mesma degradação graciosa: sem chave de API ou classificação ambígua, cai pro default `plan` (nem análise silenciosa demais, nem implementação não pedida)
+- [x] Seleciona automaticamente o preset certo dentre os criados no item 5 (`analyze`/`review-code` → `analysis-only`, `plan` → `review`, `implement` → `critical`) — mas **config explícito (`pipelineProfile:`) sempre vence** a classificação automática
+- [x] `analysis` no schema AEP ganhou `clarifyingQuestions` (array opcional); prompt do `analyze` instrui a preencher só quando faltar informação real, nunca por preencher
+- [x] 9 testes unitários (`scripts/unit-test-intent-analyzer.mjs`), incluindo o cenário real de migração C#→Java desta própria conversa, confirmando classificação `analyze` (não `implement`, mesmo com verbos como "desacoplar"/"migrar" no meio do texto)
+- [x] **Validado com chamada real, cenário exato da discussão**: `contreex "Analise essas duas aplicações..."` em PT-BR → detectou `intent: analyze (keyword) -> analysis-only` → rodou sem nenhum step de `refine` (nenhuma seção "Refinamento" na saída) → o Context Engine mostrou ao implementer que só existe um `README.md` de placeholder no projeto de teste, e o modelo gerou perguntas de esclarecimento genuinamente relevantes em vez de inventar um plano com dados insuficientes
 
 ### 7. Saída/relatório consolidado em terminal
 Os dados já existem (`agentStats()`, `doc.logs`, `doc.metrics`, `analysis.confidence`) — falta é apresentação. **Princípio de design (2026-07-12)**: a saída final deve ler como um relatório técnico consolidado de uma equipe de arquitetos, não como uma conversa com IA — o usuário não precisa ver o debate entre os revisores no uso normal.
