@@ -1,0 +1,19 @@
+# Copy to ~/.contreex/config.yaml — global defaults applied to every project
+# unless a workspace or .contreex-profile overrides them.
+reviewMode: standard
+
+roles:
+  implementer: claude
+  reviewer1: codex
+  reviewer2: agy
+
+pipeline:
+  - role: implementer
+    action: analyze
+  - parallel:
+      - role: reviewer1
+        action: review
+      - role: reviewer2
+        action: review
+  - role: implementer
+    action: refine

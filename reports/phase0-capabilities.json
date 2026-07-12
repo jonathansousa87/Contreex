@@ -1,0 +1,48 @@
+{
+  "generatedAt": "2026-07-12T16:04:40.720Z",
+  "summary": "Phase 0 complete. Claude Code and Codex CLI pass all checks with the correct flags. Antigravity CLI (agy) has one confirmed, unresolved gap: --mode plan does not block writes.",
+  "report": [
+    {
+      "name": "claude",
+      "installed": true,
+      "version": "2.1.207 (Claude Code)",
+      "headless": true,
+      "json": true,
+      "exitCodeSuccess": true,
+      "exitCodeFailure": true,
+      "timeoutEnforced": true,
+      "nativeTimeout": null,
+      "writeAllowed": true,
+      "writeBlockedWhenDenied": true,
+      "notes": "Deny-by-default headless mode is --permission-mode dontAsk. bypassPermissions + --disallowedTools does NOT enforce the deny list (confirmed: file was written anyway, permission_denials was empty). Default/plan permission modes hang indefinitely with no TTY to approve — always pair -p with an explicit permission mode."
+    },
+    {
+      "name": "codex",
+      "installed": true,
+      "version": "codex-cli 0.144.1",
+      "headless": true,
+      "json": true,
+      "exitCodeSuccess": true,
+      "exitCodeFailure": true,
+      "timeoutEnforced": true,
+      "nativeTimeout": null,
+      "writeAllowed": true,
+      "writeBlockedWhenDenied": true,
+      "notes": "codex exec reads additional prompt content from stdin and hangs forever if stdin is a piped, unclosed stream — must call child.stdin.end() (or redirect from /dev/null) on every invocation. --json emits JSONL; final answer is the last {\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":...}} event. --sandbox read-only correctly blocks writes; workspace-write correctly allows them."
+    },
+    {
+      "name": "agy",
+      "installed": true,
+      "version": "1.1.1",
+      "headless": true,
+      "json": true,
+      "exitCodeSuccess": true,
+      "exitCodeFailure": true,
+      "timeoutEnforced": true,
+      "nativeTimeout": "respected directionally but ~2x overhead (3s requested -> ~6s actual); don't rely on it alone",
+      "writeAllowed": true,
+      "writeBlockedWhenDenied": false,
+      "notes": "UNRESOLVED GAP: --mode plan does NOT block writes — confirmed twice via direct manual invocation, file was created both times. No alternative flag found yet in --help. Also: without --add-dir <cwd>, agy ignores the working directory entirely and writes into its own scratch dir (~/.gemini/antigravity-cli/scratch) instead. Do not use agy in a reviewer role until this is resolved or OS-level sandboxing (container / read-only bind mount) is added as a backstop."
+    }
+  ]
+}

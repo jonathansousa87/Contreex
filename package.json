@@ -1,0 +1,19 @@
+{
+  "name": "contreex",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Terminal CLI orchestrator for Claude Code, Codex CLI, Antigravity CLI and MimoCode CLI",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "probe": "node probe/run.mjs",
+    "test": "node scripts/unit-test-aep.mjs"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "yaml": "^2.9.0"
+  }
+}

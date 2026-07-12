@@ -1,0 +1,9 @@
+# Copy to <your-project>/.contreex-profile — this is what actually selects
+# the workspace. Contreex walks up from the current directory looking for
+# this file, the same way git looks for .git. No file found = no default
+# workspace assumed; resolveConfig() throws instead of guessing.
+profile: home
+
+# Anything below overrides both the workspace and global layers for this
+# project only. Uncomment to try it:
+# reviewMode: critical

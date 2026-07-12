@@ -1,0 +1,16 @@
+# Copy to ~/.contreex/workspaces/corporate.yaml — only ever active when a
+# project's .contreex-profile explicitly sets "profile: corporate". Fill in
+# real MCP server definitions at ~/.contreex/mcp-servers/<name>.json before
+# relying on this for anything but the example below.
+name: corporate
+mcp:
+  - corporate
+  - github
+  - jira
+  - confluence
+
+# Example of a workspace-level override: this company prefers a different
+# provider than the global default for reviewer2. Proves a provider swap is
+# a one-line config change in exactly one cascade layer, never a code change.
+roles:
+  reviewer2: mimo

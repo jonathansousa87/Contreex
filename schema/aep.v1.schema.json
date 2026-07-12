@@ -1,0 +1,202 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://contreex.local/schema/aep.v1.schema.json",
+  "title": "Agent Exchange Protocol v1",
+  "type": "object",
+  "required": ["protocol"],
+  "additionalProperties": false,
+  "properties": {
+    "protocol": { "$ref": "#/$defs/protocol" },
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "request": { "$ref": "#/$defs/request" },
+    "project": { "$ref": "#/$defs/project" },
+    "analysis": { "$ref": "#/$defs/analysis" },
+    "plan": { "$ref": "#/$defs/plan" },
+    "reviews": { "$ref": "#/$defs/reviews" },
+    "refinement": { "$ref": "#/$defs/refinement" },
+    "implementation": { "$ref": "#/$defs/implementation" },
+    "validation": { "$ref": "#/$defs/validation" },
+    "metrics": { "$ref": "#/$defs/metrics" },
+    "logs": { "type": "array", "items": { "$ref": "#/$defs/logEntry" } }
+  },
+  "$defs": {
+    "protocol": {
+      "type": "object",
+      "required": ["name", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "const": "Agent Exchange Protocol" },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["requestId", "role"],
+      "additionalProperties": false,
+      "properties": {
+        "requestId": { "type": "string", "minLength": 1 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "role": { "type": "string", "minLength": 1 },
+        "locale": { "type": "string" }
+      }
+    },
+    "request": {
+      "type": "object",
+      "required": ["objective"],
+      "additionalProperties": false,
+      "properties": {
+        "objective": { "type": "string", "minLength": 1 },
+        "constraints": { "type": "array", "items": { "type": "string" } },
+        "language": { "type": "string" }
+      }
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "root": { "type": "string" },
+        "vcsRef": { "type": "string" }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "required": ["problem"],
+      "additionalProperties": false,
+      "properties": {
+        "problem": { "type": "string", "minLength": 1 },
+        "rootCause": { "type": "string" },
+        "affectedModules": { "type": "array", "items": { "type": "string" } },
+        "risks": { "type": "array", "items": { "type": "string" } },
+        "assumptions": { "type": "array", "items": { "type": "string" } },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "plan": {
+      "type": "object",
+      "required": ["steps"],
+      "additionalProperties": false,
+      "properties": {
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "description"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "description": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "filesToModify": { "type": "array", "items": { "type": "string" } },
+        "tests": { "type": "array", "items": { "type": "string" } },
+        "rollback": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "reviews": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/review" }
+    },
+    "review": {
+      "type": "object",
+      "required": ["verdict"],
+      "additionalProperties": false,
+      "properties": {
+        "verdict": { "type": "string", "enum": ["APPROVE", "CHANGES_NEEDED", "BLOCKED"] },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["severity", "summary"],
+            "additionalProperties": false,
+            "properties": {
+              "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+              "summary": { "type": "string", "minLength": 1 },
+              "file": { "type": "string" },
+              "line": { "type": "integer" }
+            }
+          }
+        },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "refinement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "acceptedChanges": { "type": "array", "items": { "type": "string" } },
+        "rejectedChanges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["suggestion", "reason"],
+            "additionalProperties": false,
+            "properties": {
+              "suggestion": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          }
+        },
+        "updatedPlan": { "$ref": "#/$defs/plan" }
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string", "enum": ["completed", "partial", "failed"] },
+        "filesChanged": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path"],
+            "additionalProperties": false,
+            "properties": {
+              "path": { "type": "string" },
+              "diffSummary": { "type": "string" }
+            }
+          }
+        },
+        "commands": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "testsRun": { "type": "array", "items": { "type": "string" } },
+        "testsPassed": { "type": "boolean" },
+        "lintPassed": { "type": "boolean" }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "durationMs": { "type": "number", "minimum": 0 },
+        "costUsd": { "type": "number", "minimum": 0 },
+        "tokens": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "input": { "type": "integer", "minimum": 0 },
+            "output": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "logEntry": {
+      "type": "object",
+      "required": ["timestamp", "level", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "level": { "type": "string", "enum": ["debug", "info", "warn", "error"] },
+        "message": { "type": "string" },
+        "agent": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,4 @@
+# Copy to ~/.contreex/workspaces/home.yaml — no corporate MCP servers,
+# no corporate credentials, ever.
+name: home
+mcp: []
