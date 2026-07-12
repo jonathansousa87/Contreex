@@ -14,3 +14,14 @@ mcp:
 # a one-line config change in exactly one cascade layer, never a code change.
 roles:
   reviewer2: mimo
+
+# MCP as a capability, not a server name (ROADMAP.md item 11): an agent asks
+# for "git" or "issueTracker", never a literal server — this workspace
+# decides which concrete server (from the `mcp` list above) actually answers
+# it. A capability with no entry here is reported as unavailable, not an
+# error, so the same request degrades gracefully in a workspace that doesn't
+# define it (e.g. "home", which has no issueTracker at all).
+capabilities:
+  git: corporate
+  issueTracker: jira
+  docs: confluence

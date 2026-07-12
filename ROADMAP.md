@@ -135,9 +135,12 @@ Diferente de Decision Memory (Fase 7): aquilo é estatística de execução, iss
 - [x] AEP ganhou seção `consensus: {strategy, verdict, rationale}` no schema
 - [x] 10 testes unitários (`scripts/unit-test-consensus.mjs`, todos sem custo de API — é computação pura) + demo real (`scripts/demo-consensus.mjs`) confirmando o step local funcionando dentro de um pipeline de verdade (`analyze → review → consensus → refine`), com o log corretamente distinguindo `consensus (contreex)` de chamadas de agente reais
 
-### 11. MCP como Capability
-Evolução do `src/mcp-gateway.mjs` existente, não reescrita — ele já filtra por workspace, falta formalizar a indireção.
-- [ ] Agente pede uma capability ("Git", "Filesystem"), o Workspace resolve qual provider atende — o agente nunca conhece o servidor MCP diretamente
+### 11. MCP como Capability ✅ concluído — 2026-07-12
+Evolução do `src/mcp-gateway.mjs` existente, não reescrita — ele já filtrava por workspace, faltava formalizar a indireção.
+- [x] `resolveCapabilities()`/`writeMcpConfigForCapabilities()` — quem pede acesso pede uma capability ("git", "issueTracker"), nunca um nome de servidor; o workspace ativo resolve qual servidor real atende, via um mapa `capabilities: {...}` novo no YAML do workspace
+- [x] Capability sem mapeamento no workspace atual = `unavailableCapabilities`, não erro — um projeto pedindo "issueTracker" no workspace `home` (que não define isso) degrada graciosamente, igual todo o resto do sistema
+- [x] Exemplo real em `docs/examples/workspace-corporate.yaml` (e sincronizado em `~/.contreex/workspaces/corporate.yaml`): `git → corporate`, `issueTracker → jira`, `docs → confluence`
+- [x] 6 testes, incluindo confirmação de que uma capability resolve até um servidor de verdade já definido (`corporate.json`, da Fase 6) sem tocar filesystem pra capability não mapeada
 
 ### 12. Capability Discovery (contrato expandido)
 - [ ] Expandir `capabilities()` de cada plugin com booleans: `supportsJson`, `supportsMcp`, `supportsImages`, `supportsToolCalling`, `supportsStreaming`, `supportsPatch`, `supportsReadOnly`, `supportsSandbox`

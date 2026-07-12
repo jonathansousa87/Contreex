@@ -45,3 +45,31 @@ export function writeMcpConfigFile(allowedServerNames) {
   writeFileSync(file, JSON.stringify({ mcpServers }, null, 2));
   return { file, serverNames: Object.keys(mcpServers), missing };
 }
+
+/**
+ * MCP as a capability, not a literal server name (ROADMAP.md item 11): a
+ * caller asks for "git" or "issueTracker", never a specific server — the
+ * active workspace decides which concrete server (if any) actually provides
+ * that capability, via its `capabilities` map (e.g.
+ * `capabilities: { git: corporate-git, issueTracker: jira }` in a workspace
+ * YAML). A capability with no mapping in the current workspace is reported
+ * as unavailable, not an error — a project asking for "issueTracker" at
+ * home, where no such mapping exists, should degrade gracefully, not crash.
+ */
+export function resolveCapabilities(capabilityNames, capabilityMap = {}) {
+  const serverNames = [];
+  const unavailable = [];
+  for (const capability of capabilityNames ?? []) {
+    const server = capabilityMap[capability];
+    if (server) serverNames.push(server);
+    else unavailable.push(capability);
+  }
+  return { serverNames, unavailable };
+}
+
+/** Same as writeMcpConfigFile, but the caller names capabilities, never servers. */
+export function writeMcpConfigForCapabilities(capabilityNames, capabilityMap) {
+  const { serverNames, unavailable: unavailableCapabilities } = resolveCapabilities(capabilityNames, capabilityMap);
+  const result = writeMcpConfigFile(serverNames);
+  return { ...result, unavailableCapabilities };
+}
