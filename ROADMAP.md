@@ -65,11 +65,14 @@ O diferencial real do projeto — trabalhar em PT-BR, agentes operando em inglê
 - [x] 7 testes unitários (`scripts/unit-test-language.mjs`) cobrindo proteção/restauração de termos, detecção de código, termos customizados
 - [x] **Validado com chamada real e round-trip completo**: `contreex "Adicione uma função isPalindrome no arquivo utils.js..."` — traduziu pra inglês preservando `isPalindrome`/`utils.js`, rodou o pipeline inteiro, e devolveu o resumo em português (`Documento válido: verdadeiro`)
 
-### 3. Context Engine
-Hoje quem decide o que entra em cada prompt é o `orchestrator.mjs`, hardcoded (`doc.plan` + `doc.reviews`, sempre). Isso devia ser uma decisão explícita, não um acidente de implementação.
-- [ ] Decide quais arquivos, quanto contexto, quais decisões antigas e qual memória entram em cada chamada
-- [ ] Consome `src/compress.mjs` (RTK), `src/memory/query.mjs` (decision memory) e a futura Knowledge Base (item 7)
-- [ ] Alimenta o `PromptBuilder` do Language Engine — Context Engine decide o quê, Prompt Builder monta o prompt com isso
+### 3. Context Engine ✅ concluído — 2026-07-12
+Antes disso, quem decidia o que entrava em cada prompt era o `orchestrator.mjs`, hardcoded (`doc.plan` + `doc.reviews` sempre, nenhuma listagem de arquivo real do projeto). Virou uma decisão explícita e centralizada.
+- [x] `src/context-engine.mjs` — decide contexto por ação: `analyze` recebe listagem real de arquivos do projeto (`readdirSync`, antes disso os agentes eram cegos ao projeto real) + tarefas parecidas da Decision Memory; `review` recebe o plano; `refine` recebe plano + reviews
+- [x] Consome `src/memory/query.mjs` (`findSimilarRuns`, migrado de dentro do `orchestrator.mjs` pra cá)
+- [x] `src/compress.mjs` (RTK) ainda não tem consumidor real no pipeline — só faz sentido quando a ação `implement` existir de verdade e houver diff pra comprimir; Knowledge Base (item 7) ainda não existe, hook fica pra depois
+- [x] Reusa o **mesmo** `PromptBuilder` do Language Engine (`src/language/prompt-builder.mjs`) — Context Engine decide o quê, Prompt Builder só formata, nada duplicado
+- [x] `orchestrator.mjs` refatorado: cada `ACTION` agora só define `baseInstruction(doc)` (o que perguntar), não mais um `buildPrompt` completo — montagem final é `buildPrompt({ objective: action.baseInstruction(doc), context: contextEngine.gather(...) })`
+- [x] Validado com chamada real: pipeline completo rodou (`Document valid: true`), e `ContextEngine.gather()` testado isoladamente confirma que lista os arquivos reais do diretório de teste e recupera tarefas parecidas de execuções anteriores desta sessão
 
 ### 4. Pipeline declarativo / Action Registry
 - [ ] Extrair `ACTIONS` de `src/orchestrator.mjs` pra um registry externo (mesmo padrão de `src/agents/registry.mjs`)

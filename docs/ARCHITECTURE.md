@@ -11,6 +11,7 @@ This document explains what Contreex is built from, why each piece exists, and �
 - [Worktree isolation](#worktree-isolation)
 - [Agent Manager](#agent-manager)
 - [Orchestrator + pipeline DSL](#orchestrator--pipeline-dsl)
+- [Context Engine](#context-engine)
 - [Configuration](#configuration)
 - [Cache](#cache)
 - [MCP Gateway](#mcp-gateway)
@@ -132,7 +133,21 @@ const result = await manager.run(claudeAgent, {
 
 Three actions exist: `analyze` (implementer produces `analysis` + `plan` in one call), `review` (a reviewer produces its `review` section), `refine` (implementer reads all reviews and produces `refinement`). A `parallel` block runs its steps concurrently via `Promise.all` — proven with real wall-clock timing (three reviewers finishing in ~63s total, not three times that).
 
+Each `ACTION` only defines a `baseInstruction(doc)` — what to ask. It does not decide what context comes with it (that's the Context Engine, below) or how to format the final prompt string (that's `PromptBuilder`, shared with the Language Engine). `runStep` composes all three: `buildPrompt({ objective: action.baseInstruction(doc), context: contextEngine.gather(...) })`.
+
 **Graceful degradation is load-bearing, not incidental.** If one reviewer's output fails validation, `applyOutcome` simply doesn't merge that section — the pipeline continues, and the final document is still schema-valid without it. This was observed directly: MimoCode failed validation in one real run and the pipeline finished normally anyway.
+
+## Context Engine
+
+Before this existed, `orchestrator.mjs` hardcoded what went into every prompt — always the full `doc.plan` and `doc.reviews`, dumped as JSON, and nothing about the actual project (agents were blind to what files even existed). `src/context-engine.mjs`'s `ContextEngine.gather({ action, doc, projectDir })` makes that an explicit, centralized decision instead, returning a flat array of context strings per action:
+
+- `analyze` gets a real listing of the project's top-level files (`readdirSync`, dotfiles and `node_modules` filtered out, capped at 40) plus similar past tasks pulled from Decision Memory (`findSimilarRuns`, moved here from `orchestrator.mjs` directly).
+- `review` gets the plan under review.
+- `refine` gets the original plan plus all reviewer feedback.
+
+`compress.mjs` (RTK-style diff summarization) and the future Knowledge Base (see below) don't have a real consumer wired in yet — both only become relevant once an `implement` action exists with an actual diff or curated lessons to draw on. The hooks for both live here when that happens, not scattered elsewhere.
+
+Verified directly: `ContextEngine.gather()` called against a real two-file test project correctly returned `"Project files: index.js, utils.js"` plus every prior `isPalindrome`-related run recorded in Decision Memory during earlier development of this project.
 
 ## Configuration
 

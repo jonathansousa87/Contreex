@@ -11,6 +11,7 @@ import { AgentManager } from '../src/agent-manager.mjs';
 import { claudeAgent } from '../src/agents/claude-agent.mjs';
 import { codexAgent } from '../src/agents/codex-agent.mjs';
 import { agentStats } from '../src/memory/stats.mjs';
+import { findSimilarRuns } from '../src/memory/query.mjs';
 
 const roles = { implementer: claudeAgent, reviewer1: codexAgent };
 const pipeline = [
@@ -20,9 +21,15 @@ const pipeline = [
 ];
 
 async function runTask(objective) {
+  // Checked BEFORE the run — the Context Engine does this same lookup
+  // internally once the pipeline starts, but this direct call lets the demo
+  // observe memory state at the moment the task was submitted, independent
+  // of orchestrator internals.
+  const priorRunsUsed = findSimilarRuns(objective);
+
   const dir = mkdtempSync(join(tmpdir(), 'contreex-phase7-'));
   writeFileSync(join(dir, 'utils.js'), '// utils.js\nmodule.exports = {};\n');
-  const { doc, documentValid, priorRunsUsed } = await runOrchestrator({
+  const { doc, documentValid } = await runOrchestrator({
     projectDir: dir,
     objective,
     pipeline,

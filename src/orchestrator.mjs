@@ -11,14 +11,20 @@
 //
 // `roles` maps a pipeline role name to a concrete plugin, e.g.
 //   { implementer: claudeAgent, reviewer1: codexAgent, reviewer2: agyAgent }
+//
+// Each ACTION only supplies a `baseInstruction` (what to ask) — deciding WHAT
+// context goes with it is the ContextEngine's job, and turning that into one
+// prompt string is language/prompt-builder.mjs's job (the same module the
+// Language Engine uses). Neither of those two concerns lives here anymore.
 
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { AgentManager } from './agent-manager.mjs';
 import { validateAepDocument } from './aep/validate.mjs';
 import { parseAndValidateSection } from './aep/index.mjs';
-import { findSimilarRuns } from './memory/query.mjs';
 import { recordRun } from './memory/store.mjs';
+import { ContextEngine } from './context-engine.mjs';
+import { buildPrompt } from './language/prompt-builder.mjs';
 
 const schema = JSON.parse(readFileSync(new URL('../schema/aep.v1.schema.json', import.meta.url), 'utf8'));
 
@@ -38,22 +44,10 @@ const REVIEW_SCHEMA = { type: 'object', ...schema.$defs.review };
 const ACTIONS = {
   analyze: {
     role: 'implementer',
-    buildPrompt: (doc, { priorRuns = [] } = {}) => {
-      const memoryNote = priorRuns.length
-        ? `\nMemory — similar past tasks (for context only, use your own judgement): ${JSON.stringify(
-            priorRuns.map((r) => ({
-              objective: r.objective,
-              accepted: r.refinement?.acceptedCount ?? 0,
-              rejected: r.refinement?.rejectedCount ?? 0,
-              reviewVerdicts: Object.values(r.reviews ?? {}).map((rv) => rv.verdict),
-            })),
-          )}\n`
-        : '';
-      return `You are the implementer. Objective: ${doc.request.objective}${memoryNote}\nReply with ONLY a JSON object (no prose, no markdown fences) with two keys: "analysis" (problem/rootCause/risks/assumptions/confidence) and "plan" (steps: array of {id, description}).`;
-    },
+    baseInstruction: (doc) =>
+      `You are the implementer. Objective: ${doc.request.objective}\nReply with ONLY a JSON object (no prose, no markdown fences) with two keys: "analysis" (problem/rootCause/risks/assumptions/confidence) and "plan" (steps: array of {id, description}).`,
     jsonSchema: ANALYZE_SCHEMA,
     validate: (raw) => {
-      const analysis = parseAndValidateSection(raw, 'analysis');
       // analyze produces one combined object; validate the whole thing against
       // the ad-hoc combined shape instead of two separate section calls.
       let data;
@@ -73,8 +67,8 @@ const ACTIONS = {
   },
   review: {
     role: 'reviewer',
-    buildPrompt: (doc) =>
-      `You are a reviewer. Objective: ${doc.request.objective}\nPlan under review: ${JSON.stringify(doc.plan)}\nReply with ONLY a JSON object (no prose, no markdown fences) with "verdict" (exactly one of: "APPROVE", "CHANGES_NEEDED", "BLOCKED") and "findings" (array of {severity, summary}, where severity is exactly one of: "low", "medium", "high", "critical" — no other words).`,
+    baseInstruction: (doc) =>
+      `You are a reviewer. Objective: ${doc.request.objective}\nReply with ONLY a JSON object (no prose, no markdown fences) with "verdict" (exactly one of: "APPROVE", "CHANGES_NEEDED", "BLOCKED") and "findings" (array of {severity, summary}, where severity is exactly one of: "low", "medium", "high", "critical" — no other words).`,
     jsonSchema: REVIEW_SCHEMA,
     defName: 'review',
     merge: (doc, data, roleName) => {
@@ -83,8 +77,8 @@ const ACTIONS = {
   },
   refine: {
     role: 'implementer',
-    buildPrompt: (doc) =>
-      `You are the implementer. Original plan: ${JSON.stringify(doc.plan)}\nReviewer feedback: ${JSON.stringify(doc.reviews)}\nDecide what to accept or reject. Reply with ONLY a JSON object (no prose, no markdown fences) with "acceptedChanges" (array of strings) and "rejectedChanges" (array of {suggestion, reason}).`,
+    baseInstruction: () =>
+      `You are the implementer. Decide what to accept or reject from the reviewer feedback below. Reply with ONLY a JSON object (no prose, no markdown fences) with "acceptedChanges" (array of strings) and "rejectedChanges" (array of {suggestion, reason}).`,
     defName: 'refinement',
     merge: (doc, data) => {
       doc.refinement = data;
@@ -99,7 +93,7 @@ function normalizeFallback(raw) {
   return (m ? m[1] : raw).trim();
 }
 
-export async function runOrchestrator({ projectDir, objective, pipeline, roles, manager = new AgentManager(), language }) {
+export async function runOrchestrator({ projectDir, objective, pipeline, roles, manager = new AgentManager(), language, contextEngine = new ContextEngine() }) {
   const doc = {
     protocol: { name: 'Agent Exchange Protocol', version: '1.0.0' },
     metadata: { requestId: randomUUID(), role: 'orchestrator', createdAt: new Date().toISOString() },
@@ -111,14 +105,12 @@ export async function runOrchestrator({ projectDir, objective, pipeline, roles, 
     logs: [],
   };
 
-  const priorRuns = findSimilarRuns(objective);
-
   for (const step of pipeline) {
     if (step.parallel) {
-      const outcomes = await Promise.all(step.parallel.map((s) => runStep(s, doc, roles, manager, projectDir, priorRuns)));
+      const outcomes = await Promise.all(step.parallel.map((s) => runStep(s, doc, roles, manager, projectDir, contextEngine)));
       for (const outcome of outcomes) applyOutcome(doc, outcome);
     } else {
-      const outcome = await runStep(step, doc, roles, manager, projectDir, priorRuns);
+      const outcome = await runStep(step, doc, roles, manager, projectDir, contextEngine);
       applyOutcome(doc, outcome);
     }
   }
@@ -132,7 +124,7 @@ export async function runOrchestrator({ projectDir, objective, pipeline, roles, 
     // best-effort
   }
 
-  return { doc, documentValid, priorRunsUsed: priorRuns };
+  return { doc, documentValid };
 }
 
 function distillForMemory(doc, roles) {
@@ -151,13 +143,15 @@ function distillForMemory(doc, roles) {
   };
 }
 
-async function runStep(step, doc, roles, manager, projectDir, priorRuns = []) {
+async function runStep(step, doc, roles, manager, projectDir, contextEngine) {
   const action = ACTIONS[step.action];
   if (!action) throw new Error(`Unknown pipeline action: ${step.action}`);
   const plugin = roles[step.role];
   if (!plugin) throw new Error(`No provider configured for role '${step.role}'`);
 
-  const prompt = action.buildPrompt(doc, { priorRuns });
+  const context = contextEngine.gather({ action: step.action, doc, projectDir });
+  const prompt = buildPrompt({ objective: action.baseInstruction(doc), context });
+
   const result = await manager.run(plugin, {
     projectDir,
     role: step.role,
