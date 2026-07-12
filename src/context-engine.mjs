@@ -1,18 +1,20 @@
 // Context Engine — decides WHAT goes into a given pipeline step's prompt:
 // which project files, which past decisions (Decision Memory), which
-// Knowledge Base entries (not built yet — ROADMAP.md #7). Feeds the result
-// to language/prompt-builder.mjs, which only formats it. Before this existed,
-// every ACTION in orchestrator.mjs hardcoded its own context inline — this
-// is that decision made explicit and in one place.
+// Knowledge Base entries. Feeds the result to language/prompt-builder.mjs,
+// which only formats it. Before this existed, every ACTION in
+// orchestrator.mjs hardcoded its own context inline — this is that decision
+// made explicit and in one place.
 
 import { readdirSync, existsSync } from 'node:fs';
 import { findSimilarRuns } from './memory/query.mjs';
+import { queryKnowledgeBase } from './knowledge-base.mjs';
 
 const MAX_FILES_LISTED = 40;
 
 export class ContextEngine {
-  constructor({ memoryLookup = findSimilarRuns } = {}) {
+  constructor({ memoryLookup = findSimilarRuns, knowledgeLookup = queryKnowledgeBase } = {}) {
     this.memoryLookup = memoryLookup;
+    this.knowledgeLookup = knowledgeLookup;
   }
 
   /**
@@ -28,10 +30,12 @@ export class ContextEngine {
     if (action === 'analyze') {
       context.push(...this.listProjectFiles(projectDir));
       context.push(...this.similarPastTasks(doc.request.objective));
+      context.push(...this.relevantKnowledge(doc.request.objective));
     }
 
     if (action === 'review' && doc.plan) {
       context.push(`Plan under review: ${JSON.stringify(doc.plan)}`);
+      context.push(...this.relevantKnowledge(doc.request.objective));
     }
 
     if (action === 'refine') {
@@ -53,6 +57,12 @@ export class ContextEngine {
     } catch {
       return [];
     }
+  }
+
+  relevantKnowledge(objective) {
+    const entries = this.knowledgeLookup(objective);
+    if (!entries.length) return [];
+    return [`Known lessons from past experience (Knowledge Base, apply if relevant): ${JSON.stringify(entries)}`];
   }
 
   similarPastTasks(objective) {

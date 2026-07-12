@@ -120,10 +120,12 @@ Barato — `node:events` já resolve, sem dependência nova.
 - [x] `doc.logs.push(...)` não existe mais como lógica embutida — `orchestrator.mjs` registra um listener de `AfterAgentRun` que constrói `doc.logs`, removido no fim do run (`eventBus.off`)
 - [x] Validado com 4 testes usando plugins falsos (`scripts/unit-test-event-bus.mjs`) — sem custo de API — mais uma chamada real completa confirmando que nada quebrou (relatório e `Documento válido: true` inalterados)
 
-### 9. Knowledge Base
+### 9. Knowledge Base ✅ concluído — 2026-07-12
 Diferente de Decision Memory (Fase 7): aquilo é estatística de execução, isso é conhecimento curado e permanente.
-- [ ] Módulo separado — ex.: "Codex costuma perder bug de concorrência em código async", "Claude ignora o parâmetro X sob condição Y"
-- [ ] Definir mecanismo de promoção: entrada manual, ou detecção automática de padrão repetido na Decision Memory?
+- [x] `src/knowledge-base.mjs` — módulo separado, `addEntry`/`listEntries`/`queryKnowledgeBase` (mesma técnica de sobreposição de tokens do `memory/query.mjs`, consistente, não uma nova abordagem), armazenado em `~/.contreex/knowledge-base.jsonl`
+- [x] Mecanismo de promoção **v1 deliberadamente simples**: entrada manual via `addEntry()` é o caminho principal; `suggestPromotions()` só sugere candidatos (recorrência de findings por agente na Decision Memory) pra um humano confirmar — promoção totalmente automática/clustering fica pra depois, é escopo real, não implementado aqui
+- [x] Conectado ao Context Engine — `analyze` e `review` agora recebem lições relevantes da Knowledge Base junto com tarefas parecidas da Decision Memory
+- [x] 6 testes (`scripts/unit-test-knowledge-base.mjs`), incluindo injeção de dependência (`knowledgeLookup` customizável) e confirmação de que entradas de teste não vazam pra correspondências irrelevantes
 
 ### 10. Consensus Engine
 Hoje "refine" é uma chamada única do implementer decidindo tudo via prompt — funciona, mas não é uma estratégia, é um comportamento fixo.

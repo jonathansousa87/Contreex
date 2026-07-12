@@ -21,6 +21,7 @@ This document explains what Contreex is built from, why each piece exists, and �
 - [Intent Analyzer](#intent-analyzer)
 - [Terminal report](#terminal-report)
 - [Event Bus](#event-bus)
+- [Knowledge Base](#knowledge-base)
 - [Findings and gotchas per CLI](#findings-and-gotchas-per-cli)
 - [Development log](#development-log)
 
@@ -262,6 +263,10 @@ A second, related addition shipped alongside this: the `analyze` action's `analy
 `AgentManager.run()` emits `BeforeAgentRun` and `AfterAgentRun` around every call (including cache hits, marked `cached: true`), plus `RetryStarted` and `QuotaExceeded` during the retry loop. Callers can attach arbitrary metadata to a call via `eventMeta` (e.g. `orchestrator.mjs` passes `{ action: step.action }`), which gets merged into every event that call emits — `AgentManager` never has to know what a "pipeline action" is.
 
 `orchestrator.mjs` no longer builds `doc.logs` by pushing to it directly — `runOrchestrator` registers a listener on `manager.eventBus` for `AfterAgentRun` that builds each log entry, and removes the listener when the run finishes. It also emits `ReviewAccepted`/`ReviewRejected` (one event per item in `refinement.acceptedChanges`/`rejectedChanges`) and `PipelineFinished` at the end. Anything wanting to observe a run — a future dashboard, tests, logging — listens to the same events real production code already emits, instead of needing its own hook into the orchestrator internals.
+
+## Knowledge Base
+
+Distinct from the Memory Engine above: Decision Memory is per-run statistics ("this run's verdict was APPROVE"), the Knowledge Base is durable, curated lessons that stay true across many runs ("Codex tends to miss async concurrency bugs"). `src/knowledge-base.mjs` — `addEntry({text, tags})`/`listEntries()`/`queryKnowledgeBase(text)`, stored at `~/.contreex/knowledge-base.jsonl`, using the same token-overlap similarity as `memory/query.mjs`'s `findSimilarRuns` rather than inventing a second technique. Promotion is deliberately manual for v1 — `addEntry()` is the real path; `suggestPromotions()` only surfaces candidates (agents with recurring findings across recorded runs) for a human to confirm, not an autonomous pipeline. Wired into the Context Engine: `analyze` and `review` steps both get relevant Knowledge Base entries alongside similar past tasks from Decision Memory.
 
 ## Findings and gotchas per CLI
 
