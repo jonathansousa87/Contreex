@@ -8,9 +8,9 @@ Today Contreex drives four CLIs through the same plugin interface: [Claude Code]
 
 ## Status
 
-**Working alpha.** All 8 planned phases (0–7) are implemented and were validated with real, live CLI calls during development — not fixtures or mocks. It is not yet production-hardened: there's no single `contreex` CLI entrypoint yet (usage today is via the library modules and the demo scripts under `scripts/`), and a handful of known gaps are tracked in [Known limitations](#known-limitations).
+**Working alpha.** All 8 planned phases (0–7) are implemented and were validated with real, live CLI calls during development — not fixtures or mocks. There's now a minimal `contreex` CLI entrypoint (English-only for now — the PT-BR Language Engine is next on the roadmap, see [`ROADMAP.md`](ROADMAP.md)). A handful of known gaps are tracked in [Known limitations](#known-limitations).
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design, the empirical findings behind key decisions, and a phase-by-phase log of what was built and how it was proven to work.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design, the empirical findings behind key decisions, and a phase-by-phase log of what was built and how it was proven to work. See [`ROADMAP.md`](ROADMAP.md) for what's done and what's next, in priority order.
 
 ## Requirements
 
@@ -49,7 +49,28 @@ A repo-local example lives in `docs/examples/` — see [`docs/ARCHITECTURE.md#co
 
 ## Usage
 
-There is no packaged `contreex` binary yet. Today, driving a pipeline looks like this:
+```sh
+# expose the `contreex` command globally — pick whichever works on your setup:
+npm link                                                    # needs a user-writable npm global prefix
+# or, more portable (no npm global config required):
+ln -s "$(pwd)/bin/contreex.mjs" ~/.local/bin/contreex        # make sure ~/.local/bin is on PATH
+
+cd <your-project>  # needs a .contreex-profile — see Configure above
+contreex "Add isPalindrome(str) to utils.js — case-insensitive, ignore spaces."
+```
+
+```
+Usage: contreex "<objective>" [options]
+
+Options:
+  --dir <path>   Project directory to run in (default: current directory)
+  --json         Also print the full AEP document as JSON
+  -h, --help     Show this help
+```
+
+The objective has to be written in English today — the CLI shell is deliberately minimal (see `bin/contreex.mjs`) and exists mainly to give the next item on the roadmap, the PT-BR Language Engine, something real to plug into. See [`ROADMAP.md`](ROADMAP.md).
+
+Driving a pipeline from your own script instead of the CLI works the same way `bin/contreex.mjs` does internally:
 
 ```js
 import { resolveConfig } from './src/config/load.mjs';
@@ -60,7 +81,7 @@ const resolved = resolveConfig(process.cwd()); // throws if no .contreex-profile
 const roles = resolveRoles(resolved.config.roles);
 
 const { doc, documentValid } = await runOrchestrator({
-  projectDir: process.cwd(),
+  projectDir: resolved.projectRoot,
   objective: 'Add isPalindrome(str) to utils.js — case-insensitive, ignore spaces.',
   pipeline: resolved.config.pipeline,
   roles,
@@ -120,7 +141,7 @@ Each demo script talks to real, installed CLIs and will incur whatever API cost 
 
 ## Known limitations
 
-- No packaged CLI entrypoint yet (`bin/contreex.mjs` or similar) — see [Usage](#usage).
+- The CLI entrypoint is deliberately minimal — no PT-BR support yet (objectives must be written in English), no config subcommands (e.g. `contreex init`), no streaming output.
 - `Agent.cancel()` is a stub on every plugin; `exec()` doesn't currently expose the underlying child process handle, so there's no real mid-flight abort yet.
 - The plugin interface (`execute/cancel/health/capabilities/version`) works for four real CLIs but has no formal contract/test suite of its own yet.
 - The pipeline DSL is a plain JS array today; there's no formal YAML schema or validator for it (unlike AEP, which has one).

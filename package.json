@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Terminal CLI orchestrator for Claude Code, Codex CLI, Antigravity CLI and MimoCode CLI",
+  "bin": {
+    "contreex": "./bin/contreex.mjs"
+  },
   "engines": {
     "node": ">=20"
   },
