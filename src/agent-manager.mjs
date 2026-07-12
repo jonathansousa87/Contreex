@@ -70,9 +70,11 @@ export class AgentManager {
    *   action that performs a real write the caller needs to actually happen every time (e.g. 'implement').
    * @param {object} [opts.eventMeta] - extra fields merged into every event this call emits (e.g. the
    *   pipeline action name) — AgentManager doesn't interpret these, just passes them through for listeners.
+   * @param {string[]} [opts.images] - absolute paths to image files forwarded to plugin.execute();
+   *   plugins without native image support (see capabilities().supportsImages) just ignore it.
    */
-  async run(plugin, { projectDir, role, prompt, defName, jsonSchema, timeout, cache = true, eventMeta = {} }) {
-    const cacheParts = { agent: plugin.name, role, prompt, jsonSchema };
+  async run(plugin, { projectDir, role, prompt, defName, jsonSchema, timeout, cache = true, images, eventMeta = {} }) {
+    const cacheParts = { agent: plugin.name, role, prompt, jsonSchema, images };
     this.eventBus.emit(EVENTS.BEFORE_AGENT_RUN, { agent: plugin.name, role, ...eventMeta });
 
     if (cache) {
@@ -92,7 +94,7 @@ export class AgentManager {
     while (attempt <= this.maxRetries) {
       // Gate the actual CLI subprocess spawn, not worktree setup/cache
       // lookup above — that's the real resource a concurrency limit protects.
-      lastResult = await this.semaphore.run(() => plugin.execute({ prompt, cwd, role, jsonSchema, timeout }));
+      lastResult = await this.semaphore.run(() => plugin.execute({ prompt, cwd, role, jsonSchema, timeout, images }));
       if (lastResult.ok) {
         this.states.set(plugin.name, AgentState.READY);
         break;

@@ -58,6 +58,10 @@ export function formatReport(doc, documentValid, { verbose = false, diffSummary 
       lines.push(`  ${mark} ${role}: ${review.verdict}${review.findings?.length ? ` (${review.findings.length} observação(ões))` : ''}`);
       if (verbose) lines.push(...formatFindings(review.findings));
     }
+    if (doc.consensus?.rounds) {
+      const reached = doc.consensus.stopReason !== 'max rounds reached without consensus';
+      lines.push(`\n  Rodadas: ${doc.consensus.rounds}/${doc.consensus.maxRounds} — ${reached ? 'consenso atingido' : 'SEM consenso, decisão final é sua'} (${doc.consensus.stopReason})`);
+    }
   }
 
   if (doc.refinement) {
@@ -68,6 +72,9 @@ export function formatReport(doc, documentValid, { verbose = false, diffSummary 
       for (const a of accepted) lines.push(`  ✓ aceito: ${a}`);
       for (const r of rejected) lines.push(`  ✗ rejeitado: ${r.suggestion}${verbose ? ` — ${r.reason}` : ''}`);
       if (!verbose && rejected.length) lines.push('\n  (motivo de cada rejeição: use --verbose)');
+    }
+    if (doc.refinement.chiefEngineerOverride) {
+      lines.push(`\n  ⚠ Implementer decidiu seguir sem unanimidade dos revisores: ${doc.refinement.overrideRationale}`);
     }
   }
 

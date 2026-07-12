@@ -26,7 +26,7 @@ export const codexAgent = {
       sandboxed: true,
       supportsJson: true, // --json, --output-schema
       supportsMcp: true, // `codex mcp` / `codex mcp-server` subcommands (verified in --help)
-      supportsImages: true, // `codex exec -i/--image <FILE>...` (verified Phase 0)
+      supportsImages: true, // `codex exec -i/--image <FILE>...` — flag verified Phase 0, end-to-end wired and live-tested 2026-07-12
       supportsToolCalling: true,
       supportsStreaming: true, // --json JSONL event stream (verified)
       supportsPatch: true, // `codex apply` — applies the latest diff via git apply (verified in --help)
@@ -42,10 +42,13 @@ export const codexAgent = {
    * @param {'implementer'|'reviewer'} [task.role]
    * @param {object} [task.outputSchema] - passed to --output-schema as a temp file path by the caller if needed (not wired yet — see note below)
    * @param {number} [task.timeout]
+   * @param {string[]} [task.images] - absolute paths, forwarded to the native `-i/--image <FILE>...`
+   *   flag (verified in `codex exec --help`) — one `-i <path>` per image.
    */
-  async execute({ prompt, cwd, role = 'reviewer', timeout = 60_000 }) {
+  async execute({ prompt, cwd, role = 'reviewer', timeout = 60_000, images }) {
     const sandbox = role === 'implementer' ? 'workspace-write' : 'read-only';
     const args = ['exec', prompt, '--json', '--sandbox', sandbox, '--skip-git-repo-check', '-C', cwd];
+    for (const img of images ?? []) args.push('-i', img);
 
     const r = await exec('codex', args, { cwd, timeout });
     if (!r.ok) {

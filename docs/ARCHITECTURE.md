@@ -301,6 +301,39 @@ Live test, same objective, both paths: `contreex "Add isPalindrome(str) to utils
 
 `scripts/unit-test-implement.mjs` (10 tests, fake plugins, no API cost) covers the action's registration/config, its Context Engine wiring, `runOrchestrator` only surfacing `implementWorktree` after a validated successful `implement` step (not after a failed one, not when no such step ran at all), and every report section — added as the 12th file in `npm test`'s chain.
 
+## Consensus loop (dynamic review<->refine rounds)
+
+Added 2026-07-12 after the `critical`/`enterprise` presets' original fixed-2-round design turned out to have a real bug (see [Round-to-round context](#round-to-round-context) below) and the user gave an explicit weighting rule: base rule is unanimity, but the implementer ("chief engineer") carries more weight than any single reviewer, since reviewers can disagree over things that don't actually matter.
+
+`src/orchestrator.mjs` gained a new pipeline step shape, `{ loop: { maxRounds, reviewers } }`, handled by `runConsensusLoop()`: each round runs the reviewers in parallel, then the existing `consensus` local action (`src/actions/consensus.mjs`, unchanged, reused as-is) computes `unanimity` over `doc.reviews`. Three ways a round can be the last one:
+1. **Unanimous APPROVE** — the round stops immediately, `refine` doesn't even run (nothing to reconcile).
+2. **`refinement.chiefEngineerOverride: true`** — a new field on the `refinement` AEP section. The implementer can end the loop without full reviewer agreement, but only by setting this explicitly and filling `overrideRationale` with a concrete justification (`src/actions/refine.mjs`'s prompt requires this, never a generic dismissal) — this is the "Claude carries more weight" rule made structural and auditable, not a silent default.
+3. **`maxRounds` reached** — the loop ends anyway; the final round's `refine` is always the last word, and the report explicitly says consensus was *not* reached, so the decision comes back to the user rather than staying with the implementer alone.
+
+`doc.consensus` (already existed since the Consensus Engine, ROADMAP.md item 10) gained `rounds`/`maxRounds`/`stopReason`, filled in after the loop ends. `docs/examples/pipelines/critical.yaml`/`enterprise.yaml` were rewritten to use `{ loop: { maxRounds: 3, reviewers: [...] } }` instead of their old hardcoded 2-round `review → refine → review → refine` shape.
+
+Verified with real CLIs (`pipelineProfile: critical`, Claude implementer, Codex + Antigravity reviewers, an intentionally ambiguous "add unbounded caching" objective): ran 2 real rounds, converged by unanimous approval on round 2, and — notably — `refine` rejected one of the reviewer's suggestions with a *factually verified* rationale (it ran `grep`/`ls` against the real repo to confirm the reviewer's premise was wrong, rather than just asserting it). One open item, not yet diagnosed: in that same run, only one of the two configured reviewers appeared in the final `doc.reviews` — consistent with the graceful-degradation behavior documented since Phase 4 (one reviewer failing never blocks the pipeline), but the specific cause for that reviewer wasn't investigated this round.
+
+### Round-to-round context
+
+Bug found while building the loop: `refinement.updatedPlan` existed in the schema since day one but nothing ever filled or propagated it — `src/actions/refine.mjs`'s `merge()` now sets `doc.plan = data.updatedPlan` when the model provides one. Separately, `src/context-engine.mjs`'s `review` branch used to nest its `doc.refinement` context line inside `if (doc.plan)` — meaning a second review round would silently get no visibility into what the implementer already accepted/rejected whenever no plan had been set yet, and would build the *exact same prompt* as round 1 (a real correctness bug that also happened to look like a cache bug in testing — an identical prompt is, correctly, a cache hit, which is what made two genuinely different rounds return identical mocked responses in an early version of `scripts/unit-test-consensus-loop.mjs`). Fixed by un-nesting the refinement line so it fires independently of whether a plan exists.
+
+## Reviewer prompt hardening
+
+`src/actions/review.mjs`'s prompt now states explicitly: "you never create, edit, or modify any file, even if you are certain you know the fix." Before this, the only thing stopping a reviewer from writing was structural (permission mode / sandbox flags, worktree isolation) — for Antigravity and MimoCode, whose own flags don't actually block writes (Phase 0 finding), that structural layer was already load-bearing on its own; this adds an explicit instruction as defense in depth, cheap and unconditional.
+
+## Image attachments
+
+Motivated directly by the user's real workflow: they screenshot an error and paste it (Ctrl+V) straight into Claude Code's interactive terminal. Contreex is headless — one CLI invocation, no REPL to paste into — so there's no paste event to intercept; instead `src/clipboard.mjs`'s `saveClipboardImage(destDir)` reads the same Windows clipboard a paste would, via `powershell.exe` interop (`System.Windows.Forms.Clipboard` + `System.Drawing`, WSL2-only), saves it as a PNG, and translates the path with `wslpath -u`. Throws a clear `ClipboardError` if there's no image or interop isn't reachable — verified live for both cases.
+
+`bin/contreex.mjs` gained `--from-clipboard` and `--image <path>` (repeatable), resolving into `doc.request.attachments` (new `request.attachments: string[]` field in the AEP schema). Only the `analyze` step gets images — `src/orchestrator.mjs`'s `runStep` passes `images: doc.request.attachments` to `manager.run()` only when `step.action === 'analyze'`; reviewers don't need it re-attached every round. `src/agent-manager.mjs`'s `run()` forwards `images` to `plugin.execute()` and folds it into the cache key (two calls with the same prompt but different images must never collide).
+
+Two genuinely different code paths for the two verified CLIs:
+- **Codex**: native flag, `-i/--image <FILE>...` (confirmed in `codex exec --help`, `supportsImages: true` since Phase 0 but had zero consumers until now) — `src/agents/codex-agent.mjs` appends `-i <path>` per image.
+- **Claude Code**: no dedicated flag; works via the `Read` tool reading an absolute path referenced in the prompt text — `src/context-engine.mjs`'s `analyze` branch adds `Attached image(s) — look at them, they show what's actually happening: <path>`.
+
+Verified live with a real image, not a placeholder: generated a synthetic screenshot via PowerShell containing the exact text `TypeError: cannot read cnpj9931 of undefi` (deliberately clipped at the canvas edge), set it as the real Windows clipboard image, then: (1) ran the full pipeline with `--from-clipboard` — Claude's analysis transcribed the text exactly, including correctly noting it was truncated rather than inventing the rest; (2) called `codexAgent.execute()` directly with `-i` pointed at the same file — returned the identical exact transcription. Neither agent hallucinated content; both genuinely read the image.
+
 ## Findings and gotchas per CLI
 
 Collected here because they cost real time to discover and are easy to silently regress on:

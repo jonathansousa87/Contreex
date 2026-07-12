@@ -56,7 +56,8 @@
             "internal": { "type": "string" },
             "output": { "type": "string" }
           }
-        }
+        },
+        "attachments": { "type": "array", "items": { "type": "string" } }
       }
     },
     "project": {
@@ -138,7 +139,10 @@
       "properties": {
         "strategy": { "type": "string" },
         "verdict": { "type": ["string", "null"], "enum": ["APPROVE", "CHANGES_NEEDED", "BLOCKED", null] },
-        "rationale": { "type": "string" }
+        "rationale": { "type": "string" },
+        "rounds": { "type": "integer", "minimum": 1 },
+        "maxRounds": { "type": "integer", "minimum": 1 },
+        "stopReason": { "type": "string" }
       }
     },
     "refinement": {
@@ -158,7 +162,9 @@
             }
           }
         },
-        "updatedPlan": { "$ref": "#/$defs/plan" }
+        "updatedPlan": { "$ref": "#/$defs/plan" },
+        "chiefEngineerOverride": { "type": "boolean" },
+        "overrideRationale": { "type": "string" }
       }
     },
     "implementation": {

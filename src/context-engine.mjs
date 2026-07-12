@@ -31,10 +31,26 @@ export class ContextEngine {
       context.push(...this.listProjectFiles(projectDir));
       context.push(...this.similarPastTasks(doc.request.objective));
       context.push(...this.relevantKnowledge(doc.request.objective));
+      // Codex gets these structurally too (-i/--image, see agent-manager.mjs's
+      // `images` param) — this text line is what makes it work for Claude,
+      // which has no native attach flag but can Read an absolute file path.
+      if (doc.request.attachments?.length) {
+        context.push(`Attached image(s) — look at them, they show what's actually happening: ${doc.request.attachments.join(', ')}`);
+      }
     }
 
-    if (action === 'review' && doc.plan) {
-      context.push(`Plan under review: ${JSON.stringify(doc.plan)}`);
+    if (action === 'review') {
+      if (doc.plan) context.push(`Plan under review: ${JSON.stringify(doc.plan)}`);
+      // Present in a second-or-later review round after refine ran — without
+      // this, reviewers would re-review the exact same plan blind to what the
+      // implementer already accepted/rejected/updated in response to round 1.
+      // Deliberately not nested under `doc.plan` above: a round can have
+      // refinement history even when the plan itself never changed shape, and
+      // this must never be silently dropped (doing so also collapses two
+      // genuinely different rounds into an identical, cacheable prompt).
+      if (doc.refinement) {
+        context.push(`Implementer's prior refinement round (what was accepted/rejected and why — still under review, not final): ${JSON.stringify(doc.refinement)}`);
+      }
       context.push(...this.relevantKnowledge(doc.request.objective));
     }
 

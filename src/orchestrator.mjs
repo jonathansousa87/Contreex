@@ -9,6 +9,10 @@
 //     { role: 'implementer', action: 'refine' },
 //   ]
 //
+// A `loop` step runs review -> consensus -> refine repeatedly (see
+// runConsensusLoop below) instead of a fixed number of rounds:
+//   { loop: { maxRounds: 3, reviewers: [{ role: 'reviewer1', action: 'review' }, ...] } }
+//
 // `roles` maps a pipeline role name to a concrete plugin, e.g.
 //   { implementer: claudeAgent, reviewer1: codexAgent, reviewer2: agyAgent }
 //
@@ -32,14 +36,17 @@ import { buildPrompt } from './language/prompt-builder.mjs';
 import { resolveAction } from './actions/registry.mjs';
 import { EVENTS } from './event-bus.mjs';
 
-export async function runOrchestrator({ projectDir, objective, pipeline, roles, manager = new AgentManager(), language, contextEngine = new ContextEngine() }) {
+export async function runOrchestrator({ projectDir, objective, pipeline, roles, manager = new AgentManager(), language, attachments, contextEngine = new ContextEngine() }) {
   const doc = {
     protocol: { name: 'Agent Exchange Protocol', version: '1.0.0' },
     metadata: { requestId: randomUUID(), role: 'orchestrator', createdAt: new Date().toISOString() },
     // `objective` here is already internal-language (English) text — translation
     // happens one layer up, in the Language Engine, before this is ever called.
     // `language` just records provenance so the AEP document is self-describing.
-    request: language ? { objective, language } : { objective },
+    // `attachments` — absolute image paths (see src/clipboard.mjs / bin/contreex.mjs's
+    // --from-clipboard/--image) — only reaches the 'analyze' step's context/images;
+    // reviewers/refine don't see them today, see docs/ARCHITECTURE.md.
+    request: { objective, ...(language ? { language } : {}), ...(attachments?.length ? { attachments } : {}) },
     reviews: {},
     logs: [],
   };
@@ -63,7 +70,9 @@ export async function runOrchestrator({ projectDir, objective, pipeline, roles, 
 
   try {
     for (const step of pipeline) {
-      if (step.parallel) {
+      if (step.loop) {
+        await runConsensusLoop(step.loop, doc, roles, manager, projectDir, contextEngine, eventBus);
+      } else if (step.parallel) {
         const outcomes = await Promise.all(step.parallel.map((s) => runStep(s, doc, roles, manager, projectDir, contextEngine)));
         for (const outcome of outcomes) applyOutcome(doc, outcome, eventBus);
       } else {
@@ -106,6 +115,51 @@ function distillForMemory(doc, roles) {
   };
 }
 
+// Review -> consensus -> refine, repeated up to maxRounds. Stops early on
+// either of two conditions, both real signals the user asked for, not a
+// silent default: (1) reviewers unanimously APPROVE — nothing left to
+// reconcile, refine doesn't even run that round; (2) the implementer
+// ("chief engineer") explicitly declares chiefEngineerOverride — the user's
+// rule is unanimity, but Claude carries more weight than any one reviewer
+// because reviewers can push back over things that don't actually matter,
+// so an explicit, justified override can end the loop without full
+// agreement. If neither fires by maxRounds, the loop ends anyway — the
+// final round's refine is always the last word, and the report surfaces
+// that consensus was NOT reached so the decision comes back to the user,
+// not silently to Claude alone.
+async function runConsensusLoop({ reviewers, maxRounds = 3 }, doc, roles, manager, projectDir, contextEngine, eventBus) {
+  let round = 0;
+  let stopReason = 'max rounds reached without consensus';
+
+  while (round < maxRounds) {
+    round++;
+    const outcomes = await Promise.all(reviewers.map((s) => runStep(s, doc, roles, manager, projectDir, contextEngine)));
+    for (const outcome of outcomes) applyOutcome(doc, outcome, eventBus);
+
+    const consensusOutcome = await runStep({ action: 'consensus', strategy: 'unanimity' }, doc, roles, manager, projectDir, contextEngine);
+    applyOutcome(doc, consensusOutcome, eventBus);
+
+    if (doc.consensus?.verdict === 'APPROVE') {
+      stopReason = 'unanimous reviewer approval';
+      break;
+    }
+
+    const refineOutcome = await runStep({ role: 'implementer', action: 'refine' }, doc, roles, manager, projectDir, contextEngine);
+    applyOutcome(doc, refineOutcome, eventBus);
+
+    if (doc.refinement?.chiefEngineerOverride === true) {
+      stopReason = 'chief engineer override';
+      break;
+    }
+  }
+
+  if (doc.consensus) {
+    doc.consensus.rounds = round;
+    doc.consensus.maxRounds = maxRounds;
+    doc.consensus.stopReason = stopReason;
+  }
+}
+
 async function runStep(step, doc, roles, manager, projectDir, contextEngine) {
   const action = resolveAction(step.action);
 
@@ -138,6 +192,10 @@ async function runStep(step, doc, roles, manager, projectDir, contextEngine) {
     jsonSchema: action.jsonSchema,
     timeout: action.timeout ?? 60_000,
     cache: action.cache !== false,
+    // Only 'analyze' gets images today — that's the step the user actually
+    // needs to point at a screenshot ("what's happening on screen"); reviewers
+    // reviewing a plan don't need it re-attached every round.
+    images: step.action === 'analyze' ? doc.request.attachments : undefined,
     eventMeta: { action: step.action },
   });
 

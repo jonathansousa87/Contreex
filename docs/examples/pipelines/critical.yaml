@@ -1,21 +1,18 @@
-# Critical — two review rounds, exactly the double-review loop from the
-# project's original design conversation: Claude plans, Codex+Gemini review,
-# Claude refines, Codex+Gemini review the refinement, Claude decides.
-# Requires "reviewer1" and "reviewer2" in roles.
+# Critical — dynamic consensus loop instead of a fixed number of rounds
+# (changed 2026-07-12; used to be exactly 2 hardcoded review->refine rounds).
+# Claude plans, Codex+Gemini review, and the loop repeats review -> consensus
+# -> refine until either every reviewer unanimously APPROVEs, or the
+# implementer explicitly overrides remaining disagreement as not substantive
+# (chiefEngineerOverride in refinement — see src/actions/refine.mjs), or
+# maxRounds is hit, whichever comes first. Requires "reviewer1" and
+# "reviewer2" in roles.
 pipeline:
   - role: implementer
     action: analyze
-  - parallel:
-      - role: reviewer1
-        action: review
-      - role: reviewer2
-        action: review
-  - role: implementer
-    action: refine
-  - parallel:
-      - role: reviewer1
-        action: review
-      - role: reviewer2
-        action: review
-  - role: implementer
-    action: refine
+  - loop:
+      maxRounds: 3
+      reviewers:
+        - role: reviewer1
+          action: review
+        - role: reviewer2
+          action: review

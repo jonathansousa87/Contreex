@@ -165,6 +165,33 @@ Evolução do `src/mcp-gateway.mjs` existente, não reescrita — ele já filtra
 - [x] `scripts/unit-test-implement.mjs` (10 testes, todos com plugins fake — sem custo de API): registro/config da ação, instrução, merge, contexto, `runOrchestrator` só retorna `implementWorktree` após um `implement` bem-sucedido (não retorna se nenhum passo `implement` rodou, nem se a validação falhar), seções do relatório. Adicionado à cadeia `npm test` (agora 12 arquivos, todos passando).
 - [ ] `capabilities().sandboxed`/`writeBlockConfirmed` (metadados já existentes desde a Fase 0) ainda não são lidos por esta ação — permanecem só informativos por enquanto; não bloqueou o teste real porque o isolamento em worktree já é a garantia efetiva.
 
+### 15. Prompt do reviewer reforçado (defesa em profundidade) ✅ concluído — 2026-07-12
+- [x] `src/actions/review.mjs`: instrução agora inclui explicitamente "you never create, edit, or modify any file" — antes a única garantia era estrutural (permission mode/sandbox + isolamento em worktree); pra agy/mimo, cujas flags de bloqueio **não** bloqueiam escrita de verdade (achado da Fase 0), essa era a única lacuna: zero instrução em texto. Agora é defesa em duas camadas.
+
+### 16. Contexto entre rodadas de review/refine ✅ concluído — 2026-07-12
+**Achado real durante a implementação**: o campo `refinement.updatedPlan` já existia no schema desde o início do projeto, mas nada preenchia nem propagava — uma 2ª rodada de review revisava sempre o plano original, cega ao que foi decidido na 1ª rodada.
+- [x] `src/actions/refine.mjs`: `baseInstruction` agora pede `updatedPlan` quando o plano muda de verdade; `merge` propaga pra `doc.plan`.
+- [x] `src/context-engine.mjs`: contexto de `review` agora inclui `doc.refinement` (o que foi aceito/rejeitado e por quê) sempre que existir — corrigido um bug real descoberto durante os testes: essa linha estava aninhada dentro de `if (doc.plan)`, então sumia silenciosamente sempre que não havia plano ainda (o que também colapsava rodadas diferentes num prompt idêntico e cacheável, mascarando o bug).
+- [x] 8 testes novos cobrindo o cenário (`scripts/unit-test-consensus-loop.mjs`, ver item 17).
+
+### 17. Loop de consenso dinâmico (review → refine até convergir) ✅ concluído — 2026-07-12
+**Regra confirmada pelo usuário**: base é unanimidade, mas o implementer (Claude, "engenheiro-chefe") tem peso maior que qualquer revisor individual, porque divergências às vezes não fazem sentido — ele pode encerrar a rodada sem unanimidade total, desde que justifique.
+- [x] `schema/aep.v1.schema.json`: `refinement` ganhou `chiefEngineerOverride`/`overrideRationale`; `consensus` ganhou `rounds`/`maxRounds`/`stopReason`.
+- [x] `src/orchestrator.mjs`: novo tipo de passo `{ loop: { maxRounds, reviewers } }` — roda review (paralelo) → consensus (`unanimity`, reaproveitando `src/consensus.mjs` já existente do item 10) → refine, repetindo até: (a) unanimidade real (loop para, refine nem roda naquela rodada), (b) `chiefEngineerOverride: true` do implementer, ou (c) `maxRounds` atingido sem consenso — nesse caso a decisão final volta pro usuário, não fica só com o Claude.
+- [x] `docs/examples/pipelines/critical.yaml` e `enterprise.yaml` reescritos pra usar o loop (`maxRounds: 3`) no lugar do antigo esquema fixo de 2 rodadas hardcoded (que tinha o bug do item 16).
+- [x] `src/report.mjs`: seção CONSENSO agora mostra rodadas executadas, se convergiu e por quê.
+- [x] 8 testes com plugins fake (`scripts/unit-test-consensus-loop.mjs`) cobrindo os 3 caminhos de parada + propagação de `updatedPlan`.
+- [x] **Validado ao vivo** com CLIs reais (`pipelineProfile: critical`, Claude implementer + Codex/Antigravity reviewers): rodou 2 rodadas reais, convergiu por unanimidade na 2ª, e o refine rejeitou uma sugestão de revisor com justificativa factual verificada via `grep`/`ls` no próprio código — exatamente o comportamento de "engenheiro-chefe" pedido.
+
+### 18. Anexo de imagem (screenshot → agente) ✅ concluído — 2026-07-12
+Motivação do usuário: hoje ele tira print e cola (Ctrl+V) direto no CLI interativo do Claude Code. O Contreex é headless (uma chamada só, sem REPL), então não existe evento de "colar" pra interceptar — a solução lê o mesmo clipboard do Windows que o Ctrl+V usaria.
+- [x] `src/clipboard.mjs`: `saveClipboardImage(destDir)` usa `powershell.exe` (interop WSL2) + `System.Windows.Forms.Clipboard`/`System.Drawing` pra salvar a imagem do clipboard como PNG, traduz o caminho via `wslpath -u`. Erro claro (`ClipboardError`) se não houver imagem ou o interop não estiver disponível.
+- [x] `bin/contreex.mjs`: flags `--from-clipboard` e `--image <path>` (repetível), resolvidas pra `doc.request.attachments` (novo campo no schema, `request.attachments: string[]`).
+- [x] Só a etapa `analyze` recebe as imagens — revisores não precisam reanexar a cada rodada.
+- [x] Codex: `-i/--image <FILE>` nativo (achado da Fase 0, agora de fato usado — antes era só metadado sem consumidor). Claude: sem flag nativa, funciona via tool `Read` referenciando o caminho absoluto no texto do prompt (`src/context-engine.mjs`).
+- [x] **Validado ao vivo, os dois agentes, com imagem real**: gerei uma imagem sintética via PowerShell com o texto exato "TypeError: cannot read cnpj9931 of undefi" (truncado de propósito) e coloquei no clipboard real do Windows. Claude, via `--from-clipboard` na pipeline completa, transcreveu o texto exatamente e corretamente identificou que estava cortado, sem inventar o resto. Codex, chamado diretamente com `-i`, devolveu a mesma transcrição exata. Nenhum dos dois alucinou o conteúdo.
+- [ ] Achado não resolvido, fora de escopo por ora: numa rodada real do loop de consenso (item 17) com 2 revisores configurados, um deles (agy) não apareceu na seção CONSENSO do relatório — comportamento de degradação graciosa já documentado desde a Fase 4 (um revisor falhando nunca derruba o pipeline), mas não foi diagnosticado a fundo desta vez qual foi a causa específica da falha dele nessa rodada.
+
 ## Adiado indefinidamente (over-engineering ou escopo especulativo para o estágio atual)
 
 - [ ] Scheduler completo (fila, prioridade, execução distribuída) — não existe ainda um cenário de múltiplos pipelines concorrentes que justifique

@@ -14,8 +14,13 @@ import { loadPipelineProfile, UnknownPipelineProfileError } from '../src/config/
 import { openRouterOptimizer } from '../src/language/prompt-optimizer.mjs';
 import { formatReport } from '../src/report.mjs';
 import { summarizeDiff } from '../src/compress.mjs';
+import { saveClipboardImage, ClipboardError } from '../src/clipboard.mjs';
+import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 const DEFAULT_LANGUAGE = { input: 'en-US', internal: 'en-US', output: 'en-US' };
+const ATTACHMENTS_DIR = join(homedir(), '.contreex', 'attachments');
 
 function printUsage() {
   console.log(`Usage: contreex "<objective>" [options]
@@ -30,6 +35,11 @@ Options:
                           wording alone. Overrides any configured pipelineProfile. Files are
                           written only in the implementer's own git worktree, never the real
                           project directory — see the report for the manual merge step.
+  --from-clipboard        Attach whatever image is on the Windows clipboard right now (WSL2
+                          only — take a screenshot first, it goes to the clipboard the same
+                          way it does for any other paste). Seen by the implementer's analyze
+                          step only.
+  --image <path>          Attach an image file by path instead (repeatable).
   -h, --help              Show this help
 
 Requires a .contreex-profile file in the target directory or one of its
@@ -49,7 +59,7 @@ Example:
 }
 
 function parseArgs(argv) {
-  const args = { objective: null, dir: process.cwd(), json: false, help: false, verbose: false, implement: false };
+  const args = { objective: null, dir: process.cwd(), json: false, help: false, verbose: false, implement: false, fromClipboard: false, images: [] };
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -57,6 +67,8 @@ function parseArgs(argv) {
     else if (a === '--json') args.json = true;
     else if (a === '--verbose' || a === '--show-reviews') args.verbose = true;
     else if (a === '--implement') args.implement = true;
+    else if (a === '--from-clipboard') args.fromClipboard = true;
+    else if (a === '--image') args.images.push(argv[++i]);
     else if (a === '--dir') args.dir = argv[++i];
     else rest.push(a);
   }
@@ -129,6 +141,28 @@ async function main() {
 
   console.log(`\nRunning pipeline for: "${objective}"`);
 
+  const attachments = [];
+  if (args.fromClipboard) {
+    try {
+      const path = await saveClipboardImage(ATTACHMENTS_DIR);
+      attachments.push(path);
+      console.log(`Attached from clipboard: ${path}`);
+    } catch (e) {
+      if (!(e instanceof ClipboardError)) throw e;
+      console.error(`contreex: ${e.message}`);
+      process.exit(1);
+    }
+  }
+  for (const imgArg of args.images) {
+    const abs = resolve(imgArg);
+    if (!existsSync(abs)) {
+      console.error(`contreex: --image path does not exist: ${abs}`);
+      process.exit(1);
+    }
+    attachments.push(abs);
+    console.log(`Attached: ${abs}`);
+  }
+
   const roles = resolveRoles(resolved.config.roles);
   const { doc, documentValid, implementWorktree } = await runOrchestrator({
     projectDir: resolved.projectRoot,
@@ -136,6 +170,7 @@ async function main() {
     pipeline,
     roles,
     language: translating ? language : undefined,
+    attachments: attachments.length ? attachments : undefined,
   });
 
   // Best-effort: a real diff summary is a nice-to-have for the report, never

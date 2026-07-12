@@ -28,7 +28,11 @@ export const claudeAgent = {
       sandboxed: false,
       supportsJson: true, // --json-schema, --output-format json
       supportsMcp: true, // --mcp-config (verified in --help)
-      supportsImages: null, // not verified via CLI flags
+      // No dedicated CLI flag (unlike Codex's -i/--image), so this stays null —
+      // but verified live (2026-07-12): referencing an absolute image path in
+      // the prompt text works via the Read tool, which reads images natively.
+      // See src/context-engine.mjs's 'analyze' branch / src/clipboard.mjs.
+      supportsImages: null,
       supportsToolCalling: true, // Read/Write/Bash tools are core to Claude Code
       supportsStreaming: true, // --output-format stream-json (verified in --help)
       supportsPatch: null, // not verified

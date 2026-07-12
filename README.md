@@ -8,7 +8,7 @@ Today Contreex drives four CLIs through the same plugin interface: [Claude Code]
 
 ## Status
 
-**Working alpha.** All 14 planned items in [`ROADMAP.md`](ROADMAP.md) are implemented and were validated with real, live CLI calls during development — not fixtures or mocks. There's a `contreex` CLI entrypoint; it supports writing objectives in Portuguese (or any language pair) via a built-in Language Engine (agents still work internally in English, where they perform best); it automatically picks how thorough a run should be based on what you actually asked for (an analysis-only request never turns into an unrequested implementation); and, since actual code-writing is the one thing that needs an explicit order rather than inference, real file changes only happen with `--implement`, always inside an isolated git worktree, never the real project directory. A handful of known gaps are tracked in [Known limitations](#known-limitations).
+**Working alpha.** All 18 planned items in [`ROADMAP.md`](ROADMAP.md) are implemented and were validated with real, live CLI calls during development — not fixtures or mocks. There's a `contreex` CLI entrypoint; it supports writing objectives in Portuguese (or any language pair) via a built-in Language Engine (agents still work internally in English, where they perform best); it automatically picks how thorough a run should be based on what you actually asked for (an analysis-only request never turns into an unrequested implementation); real code-writing only happens with `--implement`, always inside an isolated git worktree, never the real project directory; reviewers get a dynamic consensus loop instead of a fixed round count (unanimity, with an explicit, justified override the implementer can use — see [ROADMAP.md item 17](ROADMAP.md)); and you can attach a screenshot with `--from-clipboard` or `--image <path>` for the implementer to actually look at. A handful of known gaps are tracked in [Known limitations](#known-limitations).
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design, the empirical findings behind key decisions, and a phase-by-phase log of what was built and how it was proven to work. See [`ROADMAP.md`](ROADMAP.md) for what's done and what's next, in priority order.
 
@@ -69,6 +69,9 @@ Options:
   --implement             Actually write code — requires this explicit flag, never inferred.
                           Writes only inside the implementer's own git worktree; merging into
                           the real project is a manual step you do yourself. See the report.
+  --from-clipboard        Attach the current Windows clipboard image (WSL2 only) — screenshot,
+                          then run with this flag, same as pasting into an interactive CLI.
+  --image <path>          Attach an image file by path instead (repeatable).
   -h, --help              Show this help
 ```
 
@@ -156,7 +159,8 @@ Python is effectively unavailable in the primary target environment (a corporate
 
 ```sh
 npm test                       # unit tests (scripts/unit-test-*.mjs) — AEP, language, intent, compress,
-                                # report, event bus, knowledge base, consensus, MCP capabilities, concurrency, implement
+                                # report, event bus, knowledge base, consensus, MCP capabilities, concurrency,
+                                # implement, consensus loop
 node scripts/demo-phase2.mjs   # real Claude Code call, native --json-schema + our Validator agreeing
 node scripts/demo-phase3.mjs   # Agent Manager + worktree isolation stress test
 node scripts/demo-phase4.mjs   # full pipeline: analyze -> parallel review -> refine
