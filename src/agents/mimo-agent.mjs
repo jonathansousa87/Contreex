@@ -24,7 +24,21 @@ export const mimoAgent = {
   },
 
   capabilities() {
-    return { headless: true, nativeJsonSchema: false, structuredOutput: false, sandboxed: false, writeBlockConfirmed: false };
+    return {
+      headless: true,
+      nativeJsonSchema: false,
+      structuredOutput: false,
+      sandboxed: false,
+      writeBlockConfirmed: false, // neither flag combo blocked writes (Phase 0 finding)
+      supportsJson: false, // no native structured output (verified)
+      supportsMcp: true, // `mimo mcp` subcommand (verified in --help)
+      supportsImages: null, // `-f/--file` is generic attachment, not confirmed image-specific
+      supportsToolCalling: true,
+      supportsStreaming: true, // `mimo run --format json` emits step events (verified)
+      supportsPatch: null, // not verified
+      supportsReadOnly: false, // neither --dangerously-skip-permissions nor the default blocked writes (verified Phase 0)
+      supportsSandbox: false, // no sandbox flag observed
+    };
   },
 
   async execute({ prompt, cwd, role = 'reviewer', timeout = 60_000 }) {

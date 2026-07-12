@@ -142,9 +142,11 @@ Evolução do `src/mcp-gateway.mjs` existente, não reescrita — ele já filtra
 - [x] Exemplo real em `docs/examples/workspace-corporate.yaml` (e sincronizado em `~/.contreex/workspaces/corporate.yaml`): `git → corporate`, `issueTracker → jira`, `docs → confluence`
 - [x] 6 testes, incluindo confirmação de que uma capability resolve até um servidor de verdade já definido (`corporate.json`, da Fase 6) sem tocar filesystem pra capability não mapeada
 
-### 12. Capability Discovery (contrato expandido)
-- [ ] Expandir `capabilities()` de cada plugin com booleans: `supportsJson`, `supportsMcp`, `supportsImages`, `supportsToolCalling`, `supportsStreaming`, `supportsPatch`, `supportsReadOnly`, `supportsSandbox`
-- [ ] Sem lógica de auto-decisão no pipeline ainda baseada nisso — só o contrato, até existir um cenário real que precise
+### 12. Capability Discovery (contrato expandido) ✅ concluído — 2026-07-12
+- [x] `capabilities()` de cada plugin expandido com `supportsJson`/`supportsMcp`/`supportsImages`/`supportsToolCalling`/`supportsStreaming`/`supportsPatch`/`supportsReadOnly`/`supportsSandbox` — **todo campo verificado contra `--help` real ou teste empírico da Fase 0, nunca suposto**; o que não foi verificado fica `null`, não `false` (ex.: `supportsImages` no Claude e no Antigravity)
+- [x] Achados novos ao verificar: Codex tem `apply` (aplica diff via `git apply`) e `-i/--image`, confirmando `supportsPatch`/`supportsImages`; Antigravity **não tem** `mcp` no `--help` (`supportsMcp: false`, ausência checada, não assumida); MimoCode tem subcomando `mcp` de verdade
+- [x] Ainda sem lógica de auto-decisão no pipeline baseada nisso — só o contrato, como planejado, até existir um cenário real que precise
+- [x] 8 testes (`scripts/unit-test-capabilities.mjs`) confirmando forma consistente entre os 4 plugins e os achados centrais da Fase 0 (`supportsReadOnly` verdadeiro só em Claude/Codex, falso em Antigravity/MimoCode)
 
 ### 13. Concorrência global (não Scheduler completo)
 - [ ] Limite de processos de agente simultâneos dentro do `AgentManager` — problema real, resolução barata

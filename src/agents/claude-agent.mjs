@@ -17,8 +17,24 @@ export const claudeAgent = {
     return (await this.version()) !== null;
   },
 
+  // Expanded contract (ROADMAP.md item 12): every field here is verified
+  // against real --help output or Phase 0 empirical testing, never guessed.
+  // `null` means genuinely not verified — not "false".
   capabilities() {
-    return { headless: true, nativeJsonSchema: true, structuredOutput: true, sandboxed: false };
+    return {
+      headless: true,
+      nativeJsonSchema: true,
+      structuredOutput: true,
+      sandboxed: false,
+      supportsJson: true, // --json-schema, --output-format json
+      supportsMcp: true, // --mcp-config (verified in --help)
+      supportsImages: null, // not verified via CLI flags
+      supportsToolCalling: true, // Read/Write/Bash tools are core to Claude Code
+      supportsStreaming: true, // --output-format stream-json (verified in --help)
+      supportsPatch: null, // not verified
+      supportsReadOnly: true, // --permission-mode dontAsk (verified Phase 0)
+      supportsSandbox: false, // no OS-level sandbox flag found
+    };
   },
 
   /**

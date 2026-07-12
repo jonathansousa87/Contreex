@@ -19,7 +19,21 @@ export const agyAgent = {
   },
 
   capabilities() {
-    return { headless: true, nativeJsonSchema: false, structuredOutput: false, sandboxed: false };
+    return {
+      headless: true,
+      nativeJsonSchema: false,
+      structuredOutput: false,
+      sandboxed: false,
+      writeBlockConfirmed: false, // --mode plan does NOT reliably block writes (Phase 0 finding)
+      supportsJson: false, // no native structured output (verified Phase 0)
+      supportsMcp: false, // no "mcp" subcommand/flag found in --help
+      supportsImages: null, // not verified
+      supportsToolCalling: true, // has Bash/file tools internally
+      supportsStreaming: null, // not verified
+      supportsPatch: null, // not verified
+      supportsReadOnly: false, // --mode plan does not block writes (verified Phase 0)
+      supportsSandbox: true, // top-level --sandbox flag ("terminal restrictions")
+    };
   },
 
   async execute({ prompt, cwd, role = 'reviewer', timeout = 60_000 }) {

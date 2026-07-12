@@ -19,7 +19,20 @@ export const codexAgent = {
   },
 
   capabilities() {
-    return { headless: true, nativeJsonSchema: true, structuredOutput: true, sandboxed: true };
+    return {
+      headless: true,
+      nativeJsonSchema: true,
+      structuredOutput: true,
+      sandboxed: true,
+      supportsJson: true, // --json, --output-schema
+      supportsMcp: true, // `codex mcp` / `codex mcp-server` subcommands (verified in --help)
+      supportsImages: true, // `codex exec -i/--image <FILE>...` (verified Phase 0)
+      supportsToolCalling: true,
+      supportsStreaming: true, // --json JSONL event stream (verified)
+      supportsPatch: true, // `codex apply` — applies the latest diff via git apply (verified in --help)
+      supportsReadOnly: true, // --sandbox read-only (verified Phase 0)
+      supportsSandbox: true, // --sandbox read-only|workspace-write|danger-full-access (verified)
+    };
   },
 
   /**
