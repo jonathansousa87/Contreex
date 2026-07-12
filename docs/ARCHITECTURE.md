@@ -19,6 +19,8 @@ This document explains what Contreex is built from, why each piece exists, and �
 - [Memory Engine](#memory-engine)
 - [Language Engine](#language-engine)
 - [Intent Analyzer](#intent-analyzer)
+- [Terminal report](#terminal-report)
+- [Event Bus](#event-bus)
 - [Findings and gotchas per CLI](#findings-and-gotchas-per-cli)
 - [Development log](#development-log)
 
@@ -248,6 +250,18 @@ Found through a real scenario, not speculation: a request like "analyze these tw
 The user's own framing for the eventual `implement` action, worth preserving verbatim as a design constraint: it must fire only on an **explicit command** (e.g. a distinct `/implement` subcommand or flag), never purely from natural-language keyword inference — tracked as ROADMAP.md item 14.
 
 A second, related addition shipped alongside this: the `analyze` action's `analysis` output can now include `clarifyingQuestions` — filled only when there's genuinely not enough information for a confident plan, never invented for their own sake. Verified directly: a real run of the exact migration scenario that motivated this whole feature (`"Analise essas duas aplicações..."`, C#/.NET legacy vs. a refactored Java version) correctly classified as `analyze` (despite the message also containing words like "desacoplar"/"migrar" that could read as implementation verbs), and — before the correction above — the Context Engine's real file listing (only a placeholder `README.md` existed in the test project) led the model to ask genuinely relevant clarifying questions instead of inventing a plan from nothing. Re-verified after the correction: the same kind of request now also runs `refine` (confirmed via a real call — the output included a `Refinement: 0 accepted, 0 rejected` line where it previously showed nothing).
+
+## Terminal report
+
+`src/report.mjs`'s `formatReport(doc, documentValid, {verbose})` replaces what used to be an ad-hoc `buildSummary()` inside `bin/contreex.mjs`. Design principle: the output should read like a consolidated report from a team of architects, not an AI chat transcript. Default output shows the objective, analysis (including clarifying questions when present), plan, each reviewer's verdict, and a "divergences resolved by the implementer" section built from `refinement.acceptedChanges`/`rejectedChanges` — but hides individual finding details and rejection reasons unless `--verbose`/`--show-reviews` is passed. Every number in the report traces to a real field on `doc`; nothing is computed just to look impressive (the ROADMAP.md item 7 rule).
+
+## Event Bus
+
+`src/event-bus.mjs` exports `EVENTS` (the event name constants) and a shared default `eventBus` (a plain `node:events` `EventEmitter` — no new dependency). In practice each `AgentManager` owns its own bus instance (`new AgentManager({ eventBus })`, defaulting to a fresh `EventEmitter` per manager) rather than everyone sharing the process-wide singleton — this avoids cross-talk if multiple pipelines ever run concurrently (see ROADMAP.md item 13).
+
+`AgentManager.run()` emits `BeforeAgentRun` and `AfterAgentRun` around every call (including cache hits, marked `cached: true`), plus `RetryStarted` and `QuotaExceeded` during the retry loop. Callers can attach arbitrary metadata to a call via `eventMeta` (e.g. `orchestrator.mjs` passes `{ action: step.action }`), which gets merged into every event that call emits — `AgentManager` never has to know what a "pipeline action" is.
+
+`orchestrator.mjs` no longer builds `doc.logs` by pushing to it directly — `runOrchestrator` registers a listener on `manager.eventBus` for `AfterAgentRun` that builds each log entry, and removes the listener when the run finishes. It also emits `ReviewAccepted`/`ReviewRejected` (one event per item in `refinement.acceptedChanges`/`rejectedChanges`) and `PipelineFinished` at the end. Anything wanting to observe a run — a future dashboard, tests, logging — listens to the same events real production code already emits, instead of needing its own hook into the orchestrator internals.
 
 ## Findings and gotchas per CLI
 

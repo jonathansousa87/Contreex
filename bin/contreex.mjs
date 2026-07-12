@@ -12,6 +12,7 @@ import { LanguageEngine } from '../src/language/engine.mjs';
 import { classifyIntent, profileForIntent } from '../src/intent-analyzer.mjs';
 import { loadPipelineProfile, UnknownPipelineProfileError } from '../src/config/pipeline-profiles.mjs';
 import { openRouterOptimizer } from '../src/language/prompt-optimizer.mjs';
+import { formatReport } from '../src/report.mjs';
 
 const DEFAULT_LANGUAGE = { input: 'en-US', internal: 'en-US', output: 'en-US' };
 
@@ -19,9 +20,11 @@ function printUsage() {
   console.log(`Usage: contreex "<objective>" [options]
 
 Options:
-  --dir <path>   Project directory to run in (default: current directory)
-  --json         Also print the full AEP document as JSON
-  -h, --help     Show this help
+  --dir <path>            Project directory to run in (default: current directory)
+  --json                  Also print the full AEP document as JSON
+  --verbose, --show-reviews   Show full reviewer findings and rejection reasons
+                          (default: consolidated report only, no raw debate)
+  -h, --help              Show this help
 
 Requires a .contreex-profile file in the target directory or one of its
 parents (like .git). See docs/examples/contreex-profile.yaml for a template.
@@ -40,45 +43,18 @@ Example:
 }
 
 function parseArgs(argv) {
-  const args = { objective: null, dir: process.cwd(), json: false, help: false };
+  const args = { objective: null, dir: process.cwd(), json: false, help: false, verbose: false };
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h' || a === '--help') args.help = true;
     else if (a === '--json') args.json = true;
+    else if (a === '--verbose' || a === '--show-reviews') args.verbose = true;
     else if (a === '--dir') args.dir = argv[++i];
     else rest.push(a);
   }
   args.objective = rest.join(' ').trim() || null;
   return args;
-}
-
-function buildSummary(doc, documentValid) {
-  const lines = ['=== Summary ==='];
-  if (doc.analysis) lines.push(`Problem: ${doc.analysis.problem}`);
-  if (doc.analysis?.clarifyingQuestions?.length) {
-    lines.push('Clarifying questions before a confident plan is possible:');
-    for (const q of doc.analysis.clarifyingQuestions) lines.push(`  - ${q}`);
-  }
-  if (doc.plan) lines.push(`Plan: ${doc.plan.steps.length} step(s)`);
-
-  const reviews = Object.entries(doc.reviews ?? {});
-  if (reviews.length) {
-    lines.push('Reviews:');
-    for (const [role, review] of reviews) {
-      const findings = review.findings?.length ? ` (${review.findings.length} finding(s))` : '';
-      lines.push(`  - ${role}: ${review.verdict}${findings}`);
-    }
-  }
-
-  if (doc.refinement) {
-    lines.push(`Refinement: ${doc.refinement.acceptedChanges?.length ?? 0} accepted, ${doc.refinement.rejectedChanges?.length ?? 0} rejected`);
-  }
-
-  lines.push('', `Document valid: ${documentValid.valid}`);
-  if (!documentValid.valid) lines.push('Validation errors:', JSON.stringify(documentValid.errors, null, 2));
-
-  return lines.join('\n');
 }
 
 async function main() {
@@ -146,11 +122,11 @@ async function main() {
     language: translating ? language : undefined,
   });
 
-  let summary = buildSummary(doc, documentValid);
+  let report = formatReport(doc, documentValid, { verbose: args.verbose });
   if (translating && language.internal !== language.output) {
-    summary = await languageEngine.toOutput(summary, language);
+    report = await languageEngine.toOutput(report, language);
   }
-  console.log(`\n${summary}`);
+  console.log(`\n${report}`);
 
   if (args.json) {
     console.log('\n--- AEP document ---');

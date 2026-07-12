@@ -17,6 +17,11 @@
 // is the ContextEngine's job; turning that into one prompt string is
 // language/prompt-builder.mjs's job (the same module the Language Engine
 // uses). Orchestrator only sequences steps and merges validated results.
+//
+// doc.logs is built entirely from AgentManager's own events (via
+// manager.eventBus), not by pushing directly here — anything else wanting to
+// observe a run (future observability, a dashboard, tests) listens to the
+// exact same events instead of needing its own hook into the orchestrator.
 
 import { randomUUID } from 'node:crypto';
 import { AgentManager } from './agent-manager.mjs';
@@ -25,6 +30,7 @@ import { recordRun } from './memory/store.mjs';
 import { ContextEngine } from './context-engine.mjs';
 import { buildPrompt } from './language/prompt-builder.mjs';
 import { resolveAction } from './actions/registry.mjs';
+import { EVENTS } from './event-bus.mjs';
 
 export async function runOrchestrator({ projectDir, objective, pipeline, roles, manager = new AgentManager(), language, contextEngine = new ContextEngine() }) {
   const doc = {
@@ -38,14 +44,29 @@ export async function runOrchestrator({ projectDir, objective, pipeline, roles, 
     logs: [],
   };
 
-  for (const step of pipeline) {
-    if (step.parallel) {
-      const outcomes = await Promise.all(step.parallel.map((s) => runStep(s, doc, roles, manager, projectDir, contextEngine)));
-      for (const outcome of outcomes) applyOutcome(doc, outcome);
-    } else {
-      const outcome = await runStep(step, doc, roles, manager, projectDir, contextEngine);
-      applyOutcome(doc, outcome);
+  const eventBus = manager.eventBus;
+  const logListener = ({ agent, role, action, ok, error, cached }) => {
+    doc.logs.push({
+      timestamp: new Date().toISOString(),
+      level: ok ? 'info' : 'error',
+      message: `${role} (${agent}) ran action '${action}'${cached ? ' [cached]' : ''} — ${ok ? 'ok' : error || 'validation failed'}`,
+      agent,
+    });
+  };
+  eventBus.on(EVENTS.AFTER_AGENT_RUN, logListener);
+
+  try {
+    for (const step of pipeline) {
+      if (step.parallel) {
+        const outcomes = await Promise.all(step.parallel.map((s) => runStep(s, doc, roles, manager, projectDir, contextEngine)));
+        for (const outcome of outcomes) applyOutcome(doc, outcome, eventBus);
+      } else {
+        const outcome = await runStep(step, doc, roles, manager, projectDir, contextEngine);
+        applyOutcome(doc, outcome, eventBus);
+      }
     }
+  } finally {
+    eventBus.off(EVENTS.AFTER_AGENT_RUN, logListener);
   }
 
   const documentValid = validateAepDocument(doc);
@@ -56,6 +77,8 @@ export async function runOrchestrator({ projectDir, objective, pipeline, roles, 
   } catch {
     // best-effort
   }
+
+  eventBus.emit(EVENTS.PIPELINE_FINISHED, { requestId: doc.metadata.requestId, objective: doc.request.objective, valid: documentValid.valid });
 
   return { doc, documentValid };
 }
@@ -91,19 +114,13 @@ async function runStep(step, doc, roles, manager, projectDir, contextEngine) {
     defName: action.defName,
     jsonSchema: action.jsonSchema,
     timeout: 60_000,
-  });
-
-  doc.logs.push({
-    timestamp: new Date().toISOString(),
-    level: result.ok ? 'info' : 'error',
-    message: `${step.role} (${plugin.name}) ran action '${step.action}' — ${result.ok ? 'ok' : result.error || 'validation failed'}`,
-    agent: plugin.name,
+    eventMeta: { action: step.action },
   });
 
   return { step, action, result };
 }
 
-function applyOutcome(doc, { step, action, result }) {
+function applyOutcome(doc, { step, action, result }, eventBus) {
   if (!result.ok) return; // logged already; document simply lacks this section
   let data = result.data;
   if (action.validate) {
@@ -112,4 +129,9 @@ function applyOutcome(doc, { step, action, result }) {
     data = v.data;
   }
   action.merge(doc, data, step.role);
+
+  if (step.action === 'refine' && eventBus) {
+    for (const accepted of data.acceptedChanges ?? []) eventBus.emit(EVENTS.REVIEW_ACCEPTED, { suggestion: accepted });
+    for (const rejected of data.rejectedChanges ?? []) eventBus.emit(EVENTS.REVIEW_REJECTED, rejected);
+  }
 }
