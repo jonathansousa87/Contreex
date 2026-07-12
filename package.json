@@ -12,7 +12,7 @@
   },
   "scripts": {
     "probe": "node probe/run.mjs",
-    "test": "node scripts/unit-test-aep.mjs"
+    "test": "node scripts/unit-test-aep.mjs && node scripts/unit-test-language.mjs"
   },
   "dependencies": {
     "ajv": "^8.20.0",

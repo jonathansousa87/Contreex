@@ -99,11 +99,14 @@ function normalizeFallback(raw) {
   return (m ? m[1] : raw).trim();
 }
 
-export async function runOrchestrator({ projectDir, objective, pipeline, roles, manager = new AgentManager() }) {
+export async function runOrchestrator({ projectDir, objective, pipeline, roles, manager = new AgentManager(), language }) {
   const doc = {
     protocol: { name: 'Agent Exchange Protocol', version: '1.0.0' },
     metadata: { requestId: randomUUID(), role: 'orchestrator', createdAt: new Date().toISOString() },
-    request: { objective },
+    // `objective` here is already internal-language (English) text — translation
+    // happens one layer up, in the Language Engine, before this is ever called.
+    // `language` just records provenance so the AEP document is self-describing.
+    request: language ? { objective, language } : { objective },
     reviews: {},
     logs: [],
   };

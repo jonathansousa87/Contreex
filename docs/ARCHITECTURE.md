@@ -16,6 +16,7 @@ This document explains what Contreex is built from, why each piece exists, and �
 - [MCP Gateway](#mcp-gateway)
 - [Compression (RTK-style)](#compression-rtk-style)
 - [Memory Engine](#memory-engine)
+- [Language Engine](#language-engine)
 - [Findings and gotchas per CLI](#findings-and-gotchas-per-cli)
 - [Development log](#development-log)
 
@@ -168,6 +169,20 @@ Deliberately keyed on the prompt text, not the worktree `cwd` (a meaningless ran
 Memory of **decisions**, not conversation. `src/memory/store.mjs` appends one distilled JSON record per completed pipeline run to `~/.contreex/memory/runs.jsonl` — objective, per-reviewer verdict/finding counts, refinement accept/reject counts. `src/memory/query.mjs`'s `findSimilarRuns()` does token-overlap similarity search (deliberately not embeddings — it only needs to be good enough to say "this looks like that palindrome-helper task from last week," not power a search engine) and is threaded into the `analyze` step's prompt automatically. `src/memory/stats.mjs`'s `agentStats()` aggregates verdict distribution and finding volume per agent over time — today it only exposes the numbers; using them to automatically weight or reorder reviewers is a natural next step once there's enough real history to trust.
 
 A memory-write failure is caught and swallowed inside `runOrchestrator` — memory is a side channel that must never cause a pipeline run to fail.
+
+## Language Engine
+
+The first and last component in the request/response path — see the target architecture diagram in [`ROADMAP.md`](../ROADMAP.md). Everything between `languageEngine.toInternal()` and `languageEngine.toOutput()` operates in plain internal-language English, exactly as it did before this component existed; the rest of the platform never has to think about language at all.
+
+- **`src/language/dictionary.mjs`** — protects technical terms from machine translation. A curated list (`Worktree`, `Agent`, `MCP`, `JSON Schema`, ...) plus regex-based auto-detection of code-shaped tokens (camelCase/PascalCase, `snake_case`, `file.ext`, `ALL_CAPS` acronyms, anything in backticks). Each protected term is swapped for a placeholder token (`TERMPLACEHOLDER0`, `TERMPLACEHOLDER1`, ...) before translation and restored afterward — verified empirically that this exact token shape survives Google Translate untouched in both directions.
+- **`src/language/translation-provider.mjs`** — a `TranslationProvider` interface; `googleTranslateProvider` (the free, unofficial `translate.googleapis.com` endpoint used by browser extensions — no API key, no billing, no SLA) is the first implementation. Swapping in DeepL, Azure, or the paid Cloud Translation API is adding one entry to `TRANSLATION_PROVIDERS`.
+- **`src/language/prompt-builder.mjs`** — assembles an objective plus optional context lines into one prompt string. Deliberately minimal until the Context Engine (ROADMAP.md #3) exists to decide *what* context belongs there; this module's job stays just formatting.
+- **`src/language/prompt-optimizer.mjs`** — a `PromptOptimizerProvider` interface; `openRouterOptimizer` is the first implementation, asking a free-tier model to improve the English objective's clarity while preserving every technical term and identifier verbatim. If `OPENROUTER_API_KEY` isn't set, `optimize()` is a no-op that returns the prompt unchanged — an optional quality improvement must never be allowed to fail the pipeline over a missing credential.
+- **`src/language/engine.mjs`** — `LanguageEngine` ties the above together: `toInternal(text, {input, internal})` protects terms, translates, restores terms, then optimizes; `toOutput(text, {internal, output})` protects terms, translates, restores terms (no optimization pass on the way back — the user should see their own agents' actual output, not a rephrased version of it).
+
+`bin/contreex.mjs` is the only current caller: it reads `language` from the resolved config cascade (default `{input: en-US, internal: en-US, output: en-US}`, i.e. no translation at all unless configured), calls `toInternal()` on the objective before handing it to `runOrchestrator`, and `toOutput()` on the final summary before printing it. The AEP document itself records `request.language: {input, internal, output}` for provenance — the schema's `request` `$def` was extended from a flat `language: string` to this object shape.
+
+Validated with a real round trip through the CLI: `"Adicione uma função isPalindrome no arquivo utils.js, que ignora maiúsculas e espaços."` translated to `"Add a isPalindrome function in the utils.js file, which ignores capital letters and spaces."` — `isPalindrome` and `utils.js` preserved exactly — ran the full pipeline, and the final summary came back in Portuguese (`Documento válido: verdadeiro`).
 
 ## Findings and gotchas per CLI
 

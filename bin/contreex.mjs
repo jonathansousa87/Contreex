@@ -1,12 +1,16 @@
 #!/usr/bin/env node
-// Minimal CLI shell — deliberately thin. Its only job is to give the tool a
-// real terminal entry/exit point. No Language Engine yet (see ROADMAP.md #2):
-// today the objective must be written in English. This exists so that
-// component has somewhere real to plug into, not to be a finished product.
+// CLI shell. Talks to the user in whatever language the resolved config says
+// (default: English, no translation) via the Language Engine, which sits at
+// the very edges of the request/response path — everything between
+// languageEngine.toInternal() and languageEngine.toOutput() operates in
+// plain internal-language English, same as before this file existed.
 
 import { resolveConfig, NoProfileError, UnknownWorkspaceError } from '../src/config/load.mjs';
 import { resolveRoles } from '../src/agents/registry.mjs';
 import { runOrchestrator } from '../src/orchestrator.mjs';
+import { LanguageEngine } from '../src/language/engine.mjs';
+
+const DEFAULT_LANGUAGE = { input: 'en-US', internal: 'en-US', output: 'en-US' };
 
 function printUsage() {
   console.log(`Usage: contreex "<objective>" [options]
@@ -18,6 +22,10 @@ Options:
 
 Requires a .contreex-profile file in the target directory or one of its
 parents (like .git). See docs/examples/contreex-profile.yaml for a template.
+
+The objective's language is read from the resolved config's "language"
+section (default: English, no translation). Set "language.input: pt-BR" to
+write objectives in Portuguese — see docs/examples/global-config.yaml.
 
 Example:
   contreex "Add isPalindrome(str) to utils.js"`);
@@ -37,26 +45,28 @@ function parseArgs(argv) {
   return args;
 }
 
-function printSummary(doc, documentValid) {
-  console.log('\n=== Summary ===');
-  if (doc.analysis) console.log(`Problem: ${doc.analysis.problem}`);
-  if (doc.plan) console.log(`Plan: ${doc.plan.steps.length} step(s)`);
+function buildSummary(doc, documentValid) {
+  const lines = ['=== Summary ==='];
+  if (doc.analysis) lines.push(`Problem: ${doc.analysis.problem}`);
+  if (doc.plan) lines.push(`Plan: ${doc.plan.steps.length} step(s)`);
 
   const reviews = Object.entries(doc.reviews ?? {});
   if (reviews.length) {
-    console.log('Reviews:');
+    lines.push('Reviews:');
     for (const [role, review] of reviews) {
       const findings = review.findings?.length ? ` (${review.findings.length} finding(s))` : '';
-      console.log(`  - ${role}: ${review.verdict}${findings}`);
+      lines.push(`  - ${role}: ${review.verdict}${findings}`);
     }
   }
 
   if (doc.refinement) {
-    console.log(`Refinement: ${doc.refinement.acceptedChanges?.length ?? 0} accepted, ${doc.refinement.rejectedChanges?.length ?? 0} rejected`);
+    lines.push(`Refinement: ${doc.refinement.acceptedChanges?.length ?? 0} accepted, ${doc.refinement.rejectedChanges?.length ?? 0} rejected`);
   }
 
-  console.log(`\nDocument valid: ${documentValid.valid}`);
-  if (!documentValid.valid) console.log('Validation errors:', JSON.stringify(documentValid.errors, null, 2));
+  lines.push('', `Document valid: ${documentValid.valid}`);
+  if (!documentValid.valid) lines.push('Validation errors:', JSON.stringify(documentValid.errors, null, 2));
+
+  return lines.join('\n');
 }
 
 async function main() {
@@ -79,18 +89,39 @@ async function main() {
     throw e;
   }
 
+  const language = { ...DEFAULT_LANGUAGE, ...(resolved.config.language ?? {}) };
+  const translating = language.input !== language.internal;
+
   console.log(`profile: ${resolved.profile} | roles: ${JSON.stringify(resolved.config.roles)}`);
-  console.log(`\nRunning pipeline for: "${args.objective}"`);
+  if (translating) console.log(`language: ${language.input} -> ${language.internal} -> ${language.output}`);
+
+  const languageEngine = translating
+    ? new LanguageEngine(language.translationProvider ? { translationProvider: language.translationProvider } : {})
+    : null;
+
+  let objective = args.objective;
+  if (translating) {
+    objective = await languageEngine.toInternal(args.objective, language);
+    console.log(`\nOriginal (${language.input}): ${args.objective}`);
+    console.log(`Internal (${language.internal}): ${objective}`);
+  }
+
+  console.log(`\nRunning pipeline for: "${objective}"`);
 
   const roles = resolveRoles(resolved.config.roles);
   const { doc, documentValid } = await runOrchestrator({
     projectDir: resolved.projectRoot,
-    objective: args.objective,
+    objective,
     pipeline: resolved.config.pipeline,
     roles,
+    language: translating ? language : undefined,
   });
 
-  printSummary(doc, documentValid);
+  let summary = buildSummary(doc, documentValid);
+  if (translating && language.internal !== language.output) {
+    summary = await languageEngine.toOutput(summary, language);
+  }
+  console.log(`\n${summary}`);
 
   if (args.json) {
     console.log('\n--- AEP document ---');

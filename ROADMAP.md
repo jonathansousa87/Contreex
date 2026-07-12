@@ -52,15 +52,18 @@ Sem isso a ferramenta não é usável por ninguém, nem em inglês. Deliberadame
 - [x] validado com chamada real (`node bin/contreex.mjs "Add isPalindrome..." --dir <projeto de teste>`) — pipeline completo, `Document valid: true`, exit code 0
 - [x] caminhos de erro testados: `--help` (exit 0), sem argumento (exit 1, mostra uso), sem `.contreex-profile` (exit 1, mensagem clara apontando pro template)
 
-### 2. Language Engine
+### 2. Language Engine ✅ concluído — 2026-07-12
 O diferencial real do projeto — trabalhar em PT-BR, agentes operando em inglês otimizado, resposta volta preservando terminologia técnica.
-- [ ] Dicionário técnico (preserva termos como `Worktree`, `Agent`, `MCP`, `JSON Schema`, `Reviewer`, `Implementer`...)
-- [ ] `TranslationProvider` — interface plugável (Google Translate primeiro; DeepL/Azure/LibreTranslate depois, sem mudar o resto do sistema)
-- [ ] `PromptBuilder` — monta o prompt a partir de objetivo + contexto (fornecido pelo Context Engine, item 3) + histórico + memória. Responsabilidade separada do Optimizer.
-- [ ] `PromptOptimizer` — interface plugável (OpenRouter/modelo gratuito primeiro; DeepSeek/GLM/Qwen depois), melhora clareza/ambiguidade do prompt em inglês
-- [ ] Tradução reversa EN→PT-BR + restauração de terminologia + formatação de saída
-- [ ] AEP ganha `request.language: { input, internal, output }`
-- [ ] Config: seção `language`/`translation`/`optimizer`/`dictionary` no `.contreex-profile` / workspace
+- [x] Dicionário técnico (`src/language/dictionary.mjs`) — lista curada (`Worktree`, `Agent`, `MCP`, `JSON Schema`...) + detecção automática de tokens de código (camelCase, `file.ext`, `ALL_CAPS`, crases) via placeholder que sobrevive à tradução (verificado empiricamente)
+- [x] `TranslationProvider` (`src/language/translation-provider.mjs`) — interface plugável, Google Translate (endpoint gratuito não-oficial, sem chave) como primeira implementação
+- [x] `PromptBuilder` (`src/language/prompt-builder.mjs`) — monta prompt a partir de objetivo + contexto; deliberadamente simples até o Context Engine (item 3) existir
+- [x] `PromptOptimizer` (`src/language/prompt-optimizer.mjs`) — interface plugável, OpenRouter como primeira implementação, **no-op gracioso se `OPENROUTER_API_KEY` não estiver configurada** (nunca falha o pipeline por falta de credencial opcional)
+- [x] `LanguageEngine` (`src/language/engine.mjs`) — orquestra tradução de entrada + otimização + tradução reversa + restauração de terminologia
+- [x] AEP ganha `request.language: { input, internal, output }` (schema atualizado, `additionalProperties: false`)
+- [x] Config: seção `language` no `.contreex-profile` (ver `docs/examples/`)
+- [x] `bin/contreex.mjs` integrado — objetivo e resumo final traduzidos automaticamente quando `language.input`/`output` ≠ `language.internal`
+- [x] 7 testes unitários (`scripts/unit-test-language.mjs`) cobrindo proteção/restauração de termos, detecção de código, termos customizados
+- [x] **Validado com chamada real e round-trip completo**: `contreex "Adicione uma função isPalindrome no arquivo utils.js..."` — traduziu pra inglês preservando `isPalindrome`/`utils.js`, rodou o pipeline inteiro, e devolveu o resumo em português (`Documento válido: verdadeiro`)
 
 ### 3. Context Engine
 Hoje quem decide o que entra em cada prompt é o `orchestrator.mjs`, hardcoded (`doc.plan` + `doc.reviews`, sempre). Isso devia ser uma decisão explícita, não um acidente de implementação.

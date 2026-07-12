@@ -8,7 +8,7 @@ Today Contreex drives four CLIs through the same plugin interface: [Claude Code]
 
 ## Status
 
-**Working alpha.** All 8 planned phases (0–7) are implemented and were validated with real, live CLI calls during development — not fixtures or mocks. There's now a minimal `contreex` CLI entrypoint (English-only for now — the PT-BR Language Engine is next on the roadmap, see [`ROADMAP.md`](ROADMAP.md)). A handful of known gaps are tracked in [Known limitations](#known-limitations).
+**Working alpha.** All 8 planned phases (0–7) are implemented and were validated with real, live CLI calls during development — not fixtures or mocks. There's a `contreex` CLI entrypoint, and it now supports writing objectives in Portuguese (or any language pair) via a built-in Language Engine — the agents still work internally in English, where they perform best, but you don't have to. See [`ROADMAP.md`](ROADMAP.md) for what's next. A handful of known gaps are tracked in [Known limitations](#known-limitations).
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design, the empirical findings behind key decisions, and a phase-by-phase log of what was built and how it was proven to work. See [`ROADMAP.md`](ROADMAP.md) for what's done and what's next, in priority order.
 
@@ -68,7 +68,20 @@ Options:
   -h, --help     Show this help
 ```
 
-The objective has to be written in English today — the CLI shell is deliberately minimal (see `bin/contreex.mjs`) and exists mainly to give the next item on the roadmap, the PT-BR Language Engine, something real to plug into. See [`ROADMAP.md`](ROADMAP.md).
+By default the objective is treated as English with no translation. To write in Portuguese (or any other language pair the free Google Translate endpoint supports), add a `language` block to your `.contreex-profile` or workspace config:
+
+```yaml
+language:
+  input: pt-BR      # what you write in
+  internal: en-US   # what the agents actually see — this is where they perform best
+  output: pt-BR      # what you get back
+```
+
+```sh
+contreex "Adicione uma função isPalindrome no arquivo utils.js, que ignora maiúsculas e espaços."
+```
+
+The CLI prints both the original and the translated-and-optimized objective before running, and translates the final summary back — technical terms and code identifiers (`isPalindrome`, `utils.js`, `MCP`, ...) are protected from translation on both legs via a technical dictionary (`src/language/dictionary.mjs`). See [`docs/ARCHITECTURE.md#language-engine`](docs/ARCHITECTURE.md#language-engine) for how it works.
 
 Driving a pipeline from your own script instead of the CLI works the same way `bin/contreex.mjs` does internally:
 
@@ -141,7 +154,10 @@ Each demo script talks to real, installed CLIs and will incur whatever API cost 
 
 ## Known limitations
 
-- The CLI entrypoint is deliberately minimal — no PT-BR support yet (objectives must be written in English), no config subcommands (e.g. `contreex init`), no streaming output.
+- The CLI entrypoint is still minimal — no config subcommands (e.g. `contreex init`), no streaming output.
+- The Language Engine's `PromptOptimizer` (OpenRouter) silently no-ops without an `OPENROUTER_API_KEY` — translation still works, but the English objective sent to agents won't get the extra clarity pass.
+- Google Translate (the only `TranslationProvider` today) is an unofficial free endpoint with no SLA and an undocumented length limit — fine for objectives/summaries, not verified for long documents.
+- The technical dictionary's code-token auto-detection is regex-based (camelCase/PascalCase/snake_case/file.ext/ALL_CAPS/backticks) — an unusual identifier style could slip through untranslated-unprotected and get mangled by MT.
 - `Agent.cancel()` is a stub on every plugin; `exec()` doesn't currently expose the underlying child process handle, so there's no real mid-flight abort yet.
 - The plugin interface (`execute/cancel/health/capabilities/version`) works for four real CLIs but has no formal contract/test suite of its own yet.
 - The pipeline DSL is a plain JS array today; there's no formal YAML schema or validator for it (unlike AEP, which has one).

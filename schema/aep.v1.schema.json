@@ -47,7 +47,15 @@
       "properties": {
         "objective": { "type": "string", "minLength": 1 },
         "constraints": { "type": "array", "items": { "type": "string" } },
-        "language": { "type": "string" }
+        "language": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "input": { "type": "string" },
+            "internal": { "type": "string" },
+            "output": { "type": "string" }
+          }
+        }
       }
     },
     "project": {

@@ -7,3 +7,13 @@ profile: home
 # Anything below overrides both the workspace and global layers for this
 # project only. Uncomment to try it:
 # reviewMode: critical
+
+# Write objectives in Portuguese, agents still work internally in English
+# (where they perform best), summaries come back in Portuguese. Technical
+# terms and code identifiers (isPalindrome, utils.js, MCP, ...) are protected
+# from translation automatically. Omit this block entirely for English-only,
+# no-translation behavior (the default).
+# language:
+#   input: pt-BR
+#   internal: en-US
+#   output: pt-BR
