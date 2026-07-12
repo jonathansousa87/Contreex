@@ -1,0 +1,13 @@
+# Analysis-only — analyze plus a review round, but no refine and nothing
+# resembling a decision. Use for "just look at this and tell me what you
+# think" requests — see ROADMAP.md item 6 (Intent Analyzer), which will
+# eventually pick this automatically for that kind of request. Requires
+# "reviewer1" and "reviewer2" in roles.
+pipeline:
+  - role: implementer
+    action: analyze
+  - parallel:
+      - role: reviewer1
+        action: review
+      - role: reviewer2
+        action: review

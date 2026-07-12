@@ -1,0 +1,9 @@
+# Standard — one reviewer, one refinement round. Requires "reviewer1" in roles.
+pipeline:
+  - role: implementer
+    action: analyze
+  - parallel:
+      - role: reviewer1
+        action: review
+  - role: implementer
+    action: refine

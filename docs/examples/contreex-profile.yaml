@@ -17,3 +17,11 @@ profile: home
 #   input: pt-BR
 #   internal: en-US
 #   output: pt-BR
+
+# Select a named pipeline preset instead of whatever "pipeline:" the cascade
+# resolved to. See docs/examples/pipelines/ for what each one runs — "fast"
+# (analyze only), "standard" (1 reviewer), "review" (2 reviewers, today's
+# default), "critical" (2 reviewers, double round), "enterprise" (3
+# reviewers, double round), "analysis-only" (analyze + review, no refine —
+# never leaks into a decision when you only asked for an analysis).
+# pipelineProfile: analysis-only

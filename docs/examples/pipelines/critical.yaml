@@ -1,0 +1,21 @@
+# Critical — two review rounds, exactly the double-review loop from the
+# project's original design conversation: Claude plans, Codex+Gemini review,
+# Claude refines, Codex+Gemini review the refinement, Claude decides.
+# Requires "reviewer1" and "reviewer2" in roles.
+pipeline:
+  - role: implementer
+    action: analyze
+  - parallel:
+      - role: reviewer1
+        action: review
+      - role: reviewer2
+        action: review
+  - role: implementer
+    action: refine
+  - parallel:
+      - role: reviewer1
+        action: review
+      - role: reviewer2
+        action: review
+  - role: implementer
+    action: refine

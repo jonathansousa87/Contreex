@@ -12,6 +12,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
+import { loadPipelineProfile } from './pipeline-profiles.mjs';
 
 const PROFILE_FILENAME = '.contreex-profile';
 const GLOBAL_CONFIG_PATH = join(homedir(), '.contreex', 'config.yaml');
@@ -81,6 +82,14 @@ export function resolveConfig(startDir = process.cwd()) {
   const globalConfig = loadYamlIfExists(GLOBAL_CONFIG_PATH) ?? {};
 
   const merged = deepMerge(deepMerge(globalConfig, workspaceConfig), projectConfig);
+
+  // A named preset (fast/standard/review/critical/enterprise/analysis-only)
+  // overrides whatever raw "pipeline:" array survived the cascade — the
+  // preset is the more specific choice by construction, since selecting one
+  // is itself an explicit override the user made somewhere in the cascade.
+  if (merged.pipelineProfile) {
+    merged.pipeline = loadPipelineProfile(merged.pipelineProfile);
+  }
 
   return {
     profile: profileName,

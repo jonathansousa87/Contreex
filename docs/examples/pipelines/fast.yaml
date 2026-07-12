@@ -1,0 +1,5 @@
+# Fast — implementer decides alone, no review round. Cheapest and quickest;
+# use when speed matters more than a second opinion.
+pipeline:
+  - role: implementer
+    action: analyze

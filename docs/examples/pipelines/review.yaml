@@ -1,0 +1,12 @@
+# Review — two reviewers in parallel, one refinement round. This is the
+# default pipeline used since Phase 4. Requires "reviewer1" and "reviewer2" in roles.
+pipeline:
+  - role: implementer
+    action: analyze
+  - parallel:
+      - role: reviewer1
+        action: review
+      - role: reviewer2
+        action: review
+  - role: implementer
+    action: refine

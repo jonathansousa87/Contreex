@@ -84,10 +84,12 @@ Antes disso, quem decidia o que entrava em cada prompt era o `orchestrator.mjs`,
 - [x] Removida uma linha de código morto encontrada durante a extração (`analyze`'s `validate` chamava `parseAndValidateSection` e descartava o resultado sem usar)
 - [x] Validado: `resolveAction('doesNotExist')` lança erro claro listando ações conhecidas; pipeline completo rodado com chamada real (`Document valid: true`, refinamento com 1 aceito/1 rejeitado)
 
-### 5. Pipeline Profiles (presets nomeados)
-Já desenhado como eixo ortogonal a Workspace desde a Fase 4 — só faltou criar os arquivos de verdade. Precisa vir antes do Intent Analyzer (item 6): não dá pra rotear entre pipelines que ainda não existem.
-- [ ] `fast` / `standard` / `review` / `critical` / `enterprise` como pipelines YAML prontos em `docs/examples/` ou `~/.contreex/pipelines/`
-- [ ] Incluir explicitamente um preset **analysis-only** (só `analyze` + `review`, sem `refine`/`implement`) — é o que resolve o problema descrito no item 6
+### 5. Pipeline Profiles (presets nomeados) ✅ concluído — 2026-07-12
+Já desenhado como eixo ortogonal a Workspace desde a Fase 4 — só faltou criar os arquivos de verdade e o mecanismo real de seleção.
+- [x] `fast` / `standard` / `review` / `critical` / `enterprise` / `analysis-only` como YAML reais em `~/.contreex/pipelines/*.yaml`, espelhados em `docs/examples/pipelines/` — `critical` é o loop de dupla revisão da concepção original do projeto; `enterprise` é `critical` com um terceiro revisor
+- [x] Preset **analysis-only** (`analyze` + `review`, sem `refine`) — resolve diretamente o problema descrito no item 6: um pedido só de análise não pode terminar parecendo uma decisão de implementação
+- [x] `src/config/pipeline-profiles.mjs` (`loadPipelineProfile`) + integração em `src/config/load.mjs`: `pipelineProfile: <nome>` em qualquer camada da cascata sobrescreve o `pipeline:` resolvido — sem isso, comportamento inalterado
+- [x] Validado: os 6 presets carregam com a contagem de steps esperada, perfil desconhecido lança `UnknownPipelineProfileError` claro, e uma chamada real com `pipelineProfile: fast` rodou só `analyze` (sem `Reviews:`/`Refinement:` na saída, exatamente como o preset define)
 
 ### 6. Intent Analyzer
 **Adicionado em 2026-07-12, a partir de um caso real**: um pedido de "analise essas duas aplicações" não deveria poder resultar em implementação — hoje o pipeline é fixo (sempre `analyze → review → refine`) independente do que foi pedido. Isso é uma questão de comportamento correto, não estética: a ferramenta não pode tomar decisões que não foram solicitadas.

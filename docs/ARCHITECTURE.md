@@ -167,6 +167,12 @@ Project     .contreex-profile   (found by walking up from cwd, like .git)
 
 Merge semantics: plain objects merge key-by-key across layers; arrays and primitives are replaced wholesale by the more specific layer (no implicit array concatenation).
 
+### Pipeline profiles
+
+Named presets — `fast`, `standard`, `review`, `critical`, `enterprise`, `analysis-only` — live as real YAML at `~/.contreex/pipelines/<name>.yaml` (templates in `docs/examples/pipelines/`), not just documentation. Setting `pipelineProfile: <name>` anywhere in the cascade makes `resolveConfig()` load that file via `src/config/pipeline-profiles.mjs` and override whatever raw `pipeline:` array the cascade resolved to — the preset wins because choosing one is itself the more specific override. Omitting `pipelineProfile` changes nothing about existing behavior.
+
+`fast` is analyze-only (implementer decides alone). `standard` adds one reviewer. `review` — today's default since Phase 4 — runs two reviewers in parallel. `critical` is the double-review loop from the project's original design conversation (plan → review → refine → review again → refine again). `enterprise` is `critical` with a third reviewer, requiring `reviewer3` in `roles` (this is the most thorough preset available with today's three actions, not a placeholder for a dedicated security/compliance step — that's a separate future action, see ROADMAP.md item 9). `analysis-only` runs `analyze` + `review` with **no `refine` step at all** — it exists specifically so a request that only asked for an analysis can never end up looking like the tool made an implementation decision nobody asked for.
+
 ## Cache
 
 `src/cache.mjs` is a content-addressable cache (`sha256(agent + role + prompt + jsonSchema)`), file-backed at `~/.contreex/cache/`, 15-minute TTL by default. Wired into `AgentManager.run()` with `cache: true` by default; callers pass `cache: false` for any action with a real side effect the caller genuinely needs to happen every time (nothing does yet — `analyze`/`review`/`refine` are all pure JSON generation).

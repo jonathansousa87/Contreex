@@ -1,0 +1,27 @@
+# Enterprise — critical's double-review loop with a third reviewer. Requires
+# "reviewer1", "reviewer2" AND "reviewer3" in roles (e.g. codex + agy + mimo).
+# There's no dedicated security/compliance action yet (ROADMAP.md item 9's
+# "securityReview"/"documentationReview" step types) — this is the most
+# thorough preset available with today's action set, not a placeholder for
+# those; revisit once those actions exist.
+pipeline:
+  - role: implementer
+    action: analyze
+  - parallel:
+      - role: reviewer1
+        action: review
+      - role: reviewer2
+        action: review
+      - role: reviewer3
+        action: review
+  - role: implementer
+    action: refine
+  - parallel:
+      - role: reviewer1
+        action: review
+      - role: reviewer2
+        action: review
+      - role: reviewer3
+        action: review
+  - role: implementer
+    action: refine
