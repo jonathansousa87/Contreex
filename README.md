@@ -130,4 +130,4 @@ Each demo script talks to real, installed CLIs and will incur whatever API cost 
 
 ## License
 
-Not yet chosen.
+[MIT](LICENSE)
