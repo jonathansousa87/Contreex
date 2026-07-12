@@ -1,20 +1,23 @@
 // Classifies what the user is actually asking for and picks the pipeline
-// profile that matches — the concrete fix for an analysis-only request never
-// being allowed to look like an unrequested implementation decision
-// (ROADMAP.md item 6, found through a real scenario). Runs on the RAW
-// objective text, before translation — the keyword fallback works directly
-// in whatever language the user typed, so classification never needs a
-// network call by default.
+// profile that matches. Runs on the RAW objective text, before translation —
+// the keyword fallback works directly in whatever language the user typed,
+// so classification never needs a network call by default.
 //
-// Honest limitation: "implement" intent maps to the most thorough available
-// preset (critical), not to an actual code-writing pipeline action — there
-// isn't one yet (see README "Known limitations"). Classifying intent as
-// "implement" today still only produces analysis/plan/review/refinement
-// text, same as everything else.
-
+// IMPORTANT correction (2026-07-12, caught by the user): the first version
+// of this mapped "analyze" to the "analysis-only" preset, which skips
+// "refine". That was wrong — "refine" never touches code, it's the
+// implementer synthesizing reviewer feedback into text/JSON, the same as
+// "analyze" or "review". The user wants analysis + refinement on EVERY call,
+// for a richer, synthesized response — always. What actually needs gating is
+// a hypothetical future code-writing "implement" action, which doesn't exist
+// yet (see README "Known limitations") — there is currently zero risk of
+// unrequested code changes, because nothing in this codebase can make one.
+// So every intent gets the full analyze -> review -> refine treatment;
+// "implement" just earns extra scrutiny (the double-review "critical"
+// preset) in anticipation of that future action actually writing something.
 const INTENT_PROFILES = {
-  analyze: 'analysis-only',
-  'review-code': 'analysis-only', // no dedicated code-review action yet — analysis-only is the closest honest fit
+  analyze: 'review',
+  'review-code': 'review',
   plan: 'review',
   implement: 'critical',
 };

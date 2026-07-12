@@ -49,9 +49,12 @@ check('no keyword match returns null (caller decides fallback)', () => {
   assert.equal(classifyByKeyword('utils.js needs some love'), null);
 });
 
-check('profileForIntent maps every known intent to a real preset name', () => {
-  assert.equal(profileForIntent('analyze'), 'analysis-only');
-  assert.equal(profileForIntent('review-code'), 'analysis-only');
+check('profileForIntent always includes refine (rich response) — only "implement" gets extra scrutiny', () => {
+  // Regression test: an earlier version routed "analyze" to the "analysis-only"
+  // preset, which skips refine. That was wrong — refine never touches code,
+  // it's pure text/JSON synthesis, and the user wants it on every call.
+  assert.equal(profileForIntent('analyze'), 'review');
+  assert.equal(profileForIntent('review-code'), 'review');
   assert.equal(profileForIntent('plan'), 'review');
   assert.equal(profileForIntent('implement'), 'critical');
 });

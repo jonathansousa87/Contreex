@@ -1,8 +1,11 @@
-# Analysis-only — analyze plus a review round, but no refine and nothing
-# resembling a decision. Use for "just look at this and tell me what you
-# think" requests — see ROADMAP.md item 6 (Intent Analyzer), which will
-# eventually pick this automatically for that kind of request. Requires
-# "reviewer1" and "reviewer2" in roles.
+# Analysis-only — analyze plus a review round, but no refine/synthesis step.
+# NOT auto-selected by the Intent Analyzer (corrected 2026-07-12: skipping
+# refine was never the right way to prevent unrequested implementation —
+# refine never touches code, it's pure text/JSON synthesis, and the default
+# "review" preset always includes it for a richer response). Kept as a
+# manual, opt-in leaner/faster option (set "pipelineProfile: analysis-only"
+# explicitly) for when you want speed over a fully synthesized answer.
+# Requires "reviewer1" and "reviewer2" in roles.
 pipeline:
   - role: implementer
     action: analyze

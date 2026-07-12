@@ -137,6 +137,12 @@ Evolução do `src/mcp-gateway.mjs` existente, não reescrita — ele já filtra
 - [ ] Limite de processos de agente simultâneos dentro do `AgentManager` — problema real, resolução barata
 - [ ] Fila/prioridade/execução distribuída ficam fora de escopo até existir mais de um pipeline rodando ao mesmo tempo de verdade
 
+### 14. Ação `implement` real (ainda não existe)
+**Correção importante em 2026-07-12**: a Fase 6 do Intent Analyzer originalmente tentou usar "pular o `refine`" como proxy pra "não implementar sem pedir" — estava errado. `refine` nunca mexe em código, é só o implementer sintetizando o feedback dos revisores em texto/JSON; por isso agora **toda** intenção (analyze/plan/review-code/implement) roda `analyze → review → refine` completo, sempre, pra uma resposta rica. O que realmente precisa de proteção é a futura ação que escreve código de verdade — que ainda não existe em `src/actions/`.
+- [ ] Quando essa ação for construída, ela só pode disparar por **comando explícito do usuário** (ex.: um subcomando `/implement` ou flag equivalente) — nunca só por inferência de linguagem natural via Intent Analyzer. Diretriz confirmada diretamente pelo usuário.
+- [ ] `capabilities().sandboxed`/`writeBlockConfirmed` (já existem em alguns plugins, ver Fase 0) tornam-se relevantes de verdade aqui — hoje são só metadados não usados por ninguém
+- [ ] Isolamento em worktree (já existe desde a Fase 3) é o mecanismo que torna essa ação segura de testar — implementer escreve na própria worktree, merge pra `main` é um passo humano/explícito separado, não automático
+
 ## Adiado indefinidamente (over-engineering ou escopo especulativo para o estágio atual)
 
 - [ ] Scheduler completo (fila, prioridade, execução distribuída) — não existe ainda um cenário de múltiplos pipelines concorrentes que justifique
