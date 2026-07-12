@@ -13,6 +13,7 @@ import { classifyIntent, profileForIntent } from '../src/intent-analyzer.mjs';
 import { loadPipelineProfile, UnknownPipelineProfileError } from '../src/config/pipeline-profiles.mjs';
 import { openRouterOptimizer } from '../src/language/prompt-optimizer.mjs';
 import { formatReport } from '../src/report.mjs';
+import { summarizeDiff } from '../src/compress.mjs';
 
 const DEFAULT_LANGUAGE = { input: 'en-US', internal: 'en-US', output: 'en-US' };
 
@@ -24,6 +25,11 @@ Options:
   --json                  Also print the full AEP document as JSON
   --verbose, --show-reviews   Show full reviewer findings and rejection reasons
                           (default: consolidated report only, no raw debate)
+  --implement             Actually write code (analyze -> review -> refine -> implement).
+                          Requires this explicit flag — never inferred from the objective's
+                          wording alone. Overrides any configured pipelineProfile. Files are
+                          written only in the implementer's own git worktree, never the real
+                          project directory — see the report for the manual merge step.
   -h, --help              Show this help
 
 Requires a .contreex-profile file in the target directory or one of its
@@ -33,23 +39,24 @@ The objective's language is read from the resolved config's "language"
 section (default: English, no translation). Set "language.input: pt-BR" to
 write objectives in Portuguese — see docs/examples/global-config.yaml.
 
-Unless "pipelineProfile:" is set explicitly in your config, the pipeline is
-chosen automatically based on what you actually asked for — an
-analysis-only request never turns into an unrequested implementation. See
-docs/examples/pipelines/ for the available profiles.
+Unless "pipelineProfile:" is set explicitly in your config or --implement is
+passed, the pipeline is chosen automatically based on what you actually asked
+for — an analysis-only request never turns into an unrequested implementation.
+See docs/examples/pipelines/ for the available profiles.
 
 Example:
   contreex "Add isPalindrome(str) to utils.js"`);
 }
 
 function parseArgs(argv) {
-  const args = { objective: null, dir: process.cwd(), json: false, help: false, verbose: false };
+  const args = { objective: null, dir: process.cwd(), json: false, help: false, verbose: false, implement: false };
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h' || a === '--help') args.help = true;
     else if (a === '--json') args.json = true;
     else if (a === '--verbose' || a === '--show-reviews') args.verbose = true;
+    else if (a === '--implement') args.implement = true;
     else if (a === '--dir') args.dir = argv[++i];
     else rest.push(a);
   }
@@ -77,12 +84,21 @@ async function main() {
     throw e;
   }
 
-  // An explicit "pipelineProfile:" anywhere in the config cascade always
-  // wins — auto-classification only kicks in when nothing was configured.
-  // Runs on the raw, untranslated objective: the keyword fallback works in
-  // whatever language the user typed, no network call needed by default.
+  // --implement is the one explicit, user-typed command that authorizes real
+  // writes (see src/actions/implement.mjs) — it overrides both a configured
+  // pipelineProfile and the Intent Analyzer, since neither of those is the
+  // explicit-command-only trigger the user requires for actual code changes.
+  // Without --implement, no path through this file can ever select a
+  // pipeline that includes the "implement" action.
   let pipeline = resolved.config.pipeline;
-  if (!resolved.config.pipelineProfile) {
+  if (args.implement) {
+    console.log('--implement passed -> pipeline profile: implement');
+    pipeline = loadPipelineProfile('implement');
+  } else if (!resolved.config.pipelineProfile) {
+    // An explicit "pipelineProfile:" anywhere in the config cascade always
+    // wins — auto-classification only kicks in when nothing was configured.
+    // Runs on the raw, untranslated objective: the keyword fallback works in
+    // whatever language the user typed, no network call needed by default.
     const { intent, method } = await classifyIntent(args.objective, { optimizer: openRouterOptimizer });
     const profile = profileForIntent(intent);
     console.log(`intent: ${intent} (${method}) -> pipeline profile: ${profile}`);
@@ -114,7 +130,7 @@ async function main() {
   console.log(`\nRunning pipeline for: "${objective}"`);
 
   const roles = resolveRoles(resolved.config.roles);
-  const { doc, documentValid } = await runOrchestrator({
+  const { doc, documentValid, implementWorktree } = await runOrchestrator({
     projectDir: resolved.projectRoot,
     objective,
     pipeline,
@@ -122,7 +138,18 @@ async function main() {
     language: translating ? language : undefined,
   });
 
-  let report = formatReport(doc, documentValid, { verbose: args.verbose });
+  // Best-effort: a real diff summary is a nice-to-have for the report, never
+  // a reason to fail a run that otherwise completed.
+  let diffSummary = null;
+  if (implementWorktree) {
+    try {
+      diffSummary = await summarizeDiff(implementWorktree);
+    } catch {
+      diffSummary = null;
+    }
+  }
+
+  let report = formatReport(doc, documentValid, { verbose: args.verbose, diffSummary, worktreePath: implementWorktree });
   if (translating && language.internal !== language.output) {
     report = await languageEngine.toOutput(report, language);
   }

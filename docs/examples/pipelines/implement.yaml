@@ -1,0 +1,16 @@
+# Implement — the only preset that writes real files. Never auto-selected by
+# the Intent Analyzer (natural-language "implemente" maps to "critical" —
+# thorough review, no writing) — only reachable via the CLI's explicit
+# --implement flag. Requires "reviewer1" and "reviewer2" in roles.
+pipeline:
+  - role: implementer
+    action: analyze
+  - parallel:
+      - role: reviewer1
+        action: review
+      - role: reviewer2
+        action: review
+  - role: implementer
+    action: refine
+  - role: implementer
+    action: implement

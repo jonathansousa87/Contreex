@@ -19,9 +19,12 @@ function formatFindings(findings) {
 /**
  * @param {object} doc - the AEP document
  * @param {{valid: boolean, errors: object[]}} documentValid
- * @param {{verbose?: boolean}} [opts]
+ * @param {{verbose?: boolean, diffSummary?: object, worktreePath?: string}} [opts]
+ *   diffSummary/worktreePath come from src/compress.mjs + the implementer's
+ *   real worktree (src/worktree.mjs) — both live outside the AEP document
+ *   itself, passed in separately by the caller (see bin/contreex.mjs).
  */
-export function formatReport(doc, documentValid, { verbose = false } = {}) {
+export function formatReport(doc, documentValid, { verbose = false, diffSummary = null, worktreePath = null } = {}) {
   const lines = [];
   lines.push(RULE, ' CONTREEX — RELATÓRIO', RULE);
   lines.push(`\nObjetivo: ${doc.request.objective}`);
@@ -65,6 +68,30 @@ export function formatReport(doc, documentValid, { verbose = false } = {}) {
       for (const a of accepted) lines.push(`  ✓ aceito: ${a}`);
       for (const r of rejected) lines.push(`  ✗ rejeitado: ${r.suggestion}${verbose ? ` — ${r.reason}` : ''}`);
       if (!verbose && rejected.length) lines.push('\n  (motivo de cada rejeição: use --verbose)');
+    }
+  }
+
+  if (doc.implementation) {
+    const impl = doc.implementation;
+    const mark = impl.status === 'completed' ? '✓' : impl.status === 'partial' ? '△' : '✗';
+    lines.push(section('IMPLEMENTAÇÃO'));
+    lines.push(`  ${mark} status: ${impl.status}`);
+    if (impl.filesChanged?.length) {
+      lines.push('\nArquivos alterados:');
+      for (const f of impl.filesChanged) lines.push(`  - ${f.path}${f.diffSummary ? ` — ${f.diffSummary}` : ''}`);
+    }
+    if (impl.commands?.length) {
+      lines.push('\nComandos executados pelo implementer:');
+      for (const c of impl.commands) lines.push(`  $ ${c}`);
+    }
+    if (diffSummary) {
+      lines.push(`\nDiff real (git): ${diffSummary.totalFiles} arquivo(s), +${diffSummary.insertions}/-${diffSummary.deletions}`);
+    }
+    if (worktreePath) {
+      lines.push(`\nAs alterações estão isoladas em: ${worktreePath}`);
+      lines.push('Nada foi aplicado ao projeto real. Revise e mescle manualmente quando estiver satisfeito, por exemplo:');
+      lines.push(`  git -C ${worktreePath} log -p`);
+      lines.push('  git merge <branch-da-worktree>   # rodar no diretório real do projeto');
     }
   }
 

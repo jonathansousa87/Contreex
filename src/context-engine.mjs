@@ -43,6 +43,12 @@ export class ContextEngine {
       if (doc.reviews) context.push(`Reviewer feedback: ${JSON.stringify(doc.reviews)}`);
     }
 
+    if (action === 'implement') {
+      context.push(...this.listProjectFiles(projectDir));
+      if (doc.plan) context.push(`Plan to implement: ${JSON.stringify(doc.plan)}`);
+      if (doc.refinement) context.push(`Refinement — apply accepted changes, skip rejected ones: ${JSON.stringify(doc.refinement)}`);
+    }
+
     return context;
   }
 

@@ -9,12 +9,14 @@ import { analyzeAction } from './analyze.mjs';
 import { reviewAction } from './review.mjs';
 import { refineAction } from './refine.mjs';
 import { consensusAction } from './consensus.mjs';
+import { implementAction } from './implement.mjs';
 
 export const ACTION_REGISTRY = {
   analyze: analyzeAction,
   review: reviewAction,
   refine: refineAction,
   consensus: consensusAction,
+  implement: implementAction,
 };
 
 export function resolveAction(name) {

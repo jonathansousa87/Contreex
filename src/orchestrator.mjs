@@ -55,6 +55,12 @@ export async function runOrchestrator({ projectDir, objective, pipeline, roles, 
   };
   eventBus.on(EVENTS.AFTER_AGENT_RUN, logListener);
 
+  // Not part of the AEP document (top-level additionalProperties: false
+  // forbids it) — this is purely local plumbing so the CLI can point the
+  // Compress module at the real worktree an implement step actually wrote
+  // to, for a real diff summary in the report.
+  let implementWorktree = null;
+
   try {
     for (const step of pipeline) {
       if (step.parallel) {
@@ -63,6 +69,7 @@ export async function runOrchestrator({ projectDir, objective, pipeline, roles, 
       } else {
         const outcome = await runStep(step, doc, roles, manager, projectDir, contextEngine);
         applyOutcome(doc, outcome, eventBus);
+        if (step.action === 'implement' && outcome.result.ok) implementWorktree = outcome.result.cwd;
       }
     }
   } finally {
@@ -80,7 +87,7 @@ export async function runOrchestrator({ projectDir, objective, pipeline, roles, 
 
   eventBus.emit(EVENTS.PIPELINE_FINISHED, { requestId: doc.metadata.requestId, objective: doc.request.objective, valid: documentValid.valid });
 
-  return { doc, documentValid };
+  return { doc, documentValid, implementWorktree };
 }
 
 function distillForMemory(doc, roles) {
@@ -129,7 +136,8 @@ async function runStep(step, doc, roles, manager, projectDir, contextEngine) {
     prompt,
     defName: action.defName,
     jsonSchema: action.jsonSchema,
-    timeout: 60_000,
+    timeout: action.timeout ?? 60_000,
+    cache: action.cache !== false,
     eventMeta: { action: step.action },
   });
 
