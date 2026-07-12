@@ -23,7 +23,7 @@ const DEFAULT_LANGUAGE = { input: 'en-US', internal: 'en-US', output: 'en-US' };
 const ATTACHMENTS_DIR = join(homedir(), '.contreex', 'attachments');
 
 function printUsage() {
-  console.log(`Usage: contreex "<objective>" [options]
+  console.log(`Usage: ctx "<objective>" [options]   (alias: contreex)
 
 Options:
   --dir <path>            Project directory to run in (default: current directory)
@@ -55,7 +55,7 @@ for — an analysis-only request never turns into an unrequested implementation.
 See docs/examples/pipelines/ for the available profiles.
 
 Example:
-  contreex "Add isPalindrome(str) to utils.js"`);
+  ctx "Add isPalindrome(str) to utils.js"`);
 }
 
 function parseArgs(argv) {

@@ -1,7 +1,5 @@
 # Contreex
 
-*(working name — not finalized, see [Status](#status))*
-
 A terminal-only orchestrator for AI coding CLIs. One agent — the **implementer** — analyzes, plans, and implements. One or more other agents act purely as **reviewers**: they critique the plan, they never implement. Every agent exchanges structured JSON validated against a shared schema (the **AEP**, Agent Exchange Protocol) instead of free text, so nothing gets lost or hallucinated in translation between agents.
 
 Today Contreex drives four CLIs through the same plugin interface: [Claude Code](https://claude.com/claude-code), [Codex CLI](https://github.com/openai/codex), [Antigravity CLI](https://antigravity.google) (`agy`), and [MimoCode CLI](https://mimo.xiaomi.com) (`mimo`). Adding a fifth is a config change, not a code change — see [Architecture](#architecture).
@@ -50,17 +48,19 @@ A repo-local example lives in `docs/examples/` — see [`docs/ARCHITECTURE.md#co
 ## Usage
 
 ```sh
-# expose the `contreex` command globally — pick whichever works on your setup:
+# expose the `ctx` command globally (also aliased as `contreex`) — pick whichever works on your setup:
 npm link                                                    # needs a user-writable npm global prefix
 # or, more portable (no npm global config required):
-ln -s "$(pwd)/bin/contreex.mjs" ~/.local/bin/contreex        # make sure ~/.local/bin is on PATH
+ln -s "$(pwd)/bin/contreex.mjs" ~/.local/bin/ctx              # make sure ~/.local/bin is on PATH
 
 cd <your-project>  # needs a .contreex-profile — see Configure above
-contreex "Add isPalindrome(str) to utils.js — case-insensitive, ignore spaces."
+ctx "Add isPalindrome(str) to utils.js — case-insensitive, ignore spaces."
 ```
 
+See [`manual-pt_br.md`](manual-pt_br.md) for a from-scratch setup walkthrough in Portuguese.
+
 ```
-Usage: contreex "<objective>" [options]
+Usage: ctx "<objective>" [options]   (alias: contreex)
 
 Options:
   --dir <path>            Project directory to run in (default: current directory)
@@ -85,7 +85,7 @@ language:
 ```
 
 ```sh
-contreex "Adicione uma função isPalindrome no arquivo utils.js, que ignora maiúsculas e espaços."
+ctx "Adicione uma função isPalindrome no arquivo utils.js, que ignora maiúsculas e espaços."
 ```
 
 The CLI prints both the original and the translated-and-optimized objective before running, and translates the final summary back — technical terms and code identifiers (`isPalindrome`, `utils.js`, `MCP`, ...) are protected from translation on both legs via a technical dictionary (`src/language/dictionary.mjs`). See [`docs/ARCHITECTURE.md#language-engine`](docs/ARCHITECTURE.md#language-engine) for how it works.
