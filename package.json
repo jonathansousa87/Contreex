@@ -12,7 +12,7 @@
   },
   "scripts": {
     "probe": "node probe/run.mjs",
-    "test": "node scripts/unit-test-aep.mjs && node scripts/unit-test-language.mjs && node scripts/unit-test-intent-analyzer.mjs && node scripts/unit-test-compress.mjs && node scripts/unit-test-report.mjs && node scripts/unit-test-event-bus.mjs && node scripts/unit-test-knowledge-base.mjs && node scripts/unit-test-consensus.mjs && node scripts/unit-test-mcp-capabilities.mjs && node scripts/unit-test-capabilities.mjs"
+    "test": "node scripts/unit-test-aep.mjs && node scripts/unit-test-language.mjs && node scripts/unit-test-intent-analyzer.mjs && node scripts/unit-test-compress.mjs && node scripts/unit-test-report.mjs && node scripts/unit-test-event-bus.mjs && node scripts/unit-test-knowledge-base.mjs && node scripts/unit-test-consensus.mjs && node scripts/unit-test-mcp-capabilities.mjs && node scripts/unit-test-capabilities.mjs && node scripts/unit-test-concurrency.mjs"
   },
   "dependencies": {
     "ajv": "^8.20.0",

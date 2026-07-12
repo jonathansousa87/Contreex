@@ -9,6 +9,7 @@ This document explains what Contreex is built from, why each piece exists, and �
 - [The Agent Exchange Protocol (AEP)](#the-agent-exchange-protocol-aep)
 - [Normalizer + Validator](#normalizer--validator)
 - [Worktree isolation](#worktree-isolation)
+- [Concurrency limit](#concurrency-limit)
 - [Agent Manager](#agent-manager)
 - [Orchestrator + pipeline DSL](#orchestrator--pipeline-dsl)
 - [Context Engine](#context-engine)
@@ -104,6 +105,10 @@ This exists because Phase 0 testing found that CLI-level permission flags are no
 | MimoCode (`mimo`) | none found | **No** — both `--dangerously-skip-permissions` and the bare default wrote the file |
 
 Rather than keep chasing a flag that might not exist, the fix is structural: none of that matters if the reviewer is physically confined to a disposable worktree that never gets merged. This is the same technique used by prior art in this space ([claw-orchestrator](https://github.com/Enderfga/claw-orchestrator), [ccswarm](https://github.com/nwiizo/ccswarm)) — neither of them trusts CLI-level permission flags either.
+
+## Concurrency limit
+
+`src/concurrency.mjs`'s `Semaphore` caps how many agent CLI subprocesses can be in flight at once — deliberately not a full Scheduler (queue, priority, distributed execution, ROADMAP.md's "adiado indefinidamente" list); there's no real use case yet for anything beyond a simple cap. Default limit is 4, overridable via `CONTREEX_MAX_CONCURRENT_AGENTS`. A shared `defaultSemaphore` instance covers the whole process by default (the real risk is too many subprocesses system-wide, not per-`AgentManager`), and `AgentManager.run()` wraps only the actual `plugin.execute()` call in it — worktree setup and cache lookups aren't gated, since they're not the resource being protected.
 
 ## Agent Manager
 

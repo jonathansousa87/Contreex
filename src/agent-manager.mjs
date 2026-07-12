@@ -7,6 +7,7 @@ import { createWorktree } from './worktree.mjs';
 import { parseAndValidateSection } from './aep/index.mjs';
 import { getCached, setCached } from './cache.mjs';
 import { EVENTS } from './event-bus.mjs';
+import { defaultSemaphore } from './concurrency.mjs';
 
 export const AgentState = Object.freeze({
   READY: 'READY',
@@ -39,10 +40,11 @@ function classifyFailure(result) {
 }
 
 export class AgentManager {
-  constructor({ maxRetries = 2, retryDelayMs = 1_000, eventBus = new EventEmitter() } = {}) {
+  constructor({ maxRetries = 2, retryDelayMs = 1_000, eventBus = new EventEmitter(), semaphore = defaultSemaphore } = {}) {
     this.maxRetries = maxRetries;
     this.retryDelayMs = retryDelayMs;
     this.eventBus = eventBus;
+    this.semaphore = semaphore;
     this.states = new Map(); // agentName -> AgentState
   }
 
@@ -88,7 +90,9 @@ export class AgentManager {
     let attempt = 0;
     let lastResult;
     while (attempt <= this.maxRetries) {
-      lastResult = await plugin.execute({ prompt, cwd, role, jsonSchema, timeout });
+      // Gate the actual CLI subprocess spawn, not worktree setup/cache
+      // lookup above — that's the real resource a concurrency limit protects.
+      lastResult = await this.semaphore.run(() => plugin.execute({ prompt, cwd, role, jsonSchema, timeout }));
       if (lastResult.ok) {
         this.states.set(plugin.name, AgentState.READY);
         break;

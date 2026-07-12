@@ -148,9 +148,11 @@ Evolução do `src/mcp-gateway.mjs` existente, não reescrita — ele já filtra
 - [x] Ainda sem lógica de auto-decisão no pipeline baseada nisso — só o contrato, como planejado, até existir um cenário real que precise
 - [x] 8 testes (`scripts/unit-test-capabilities.mjs`) confirmando forma consistente entre os 4 plugins e os achados centrais da Fase 0 (`supportsReadOnly` verdadeiro só em Claude/Codex, falso em Antigravity/MimoCode)
 
-### 13. Concorrência global (não Scheduler completo)
-- [ ] Limite de processos de agente simultâneos dentro do `AgentManager` — problema real, resolução barata
-- [ ] Fila/prioridade/execução distribuída ficam fora de escopo até existir mais de um pipeline rodando ao mesmo tempo de verdade
+### 13. Concorrência global (não Scheduler completo) ✅ concluído — 2026-07-12
+- [x] `src/concurrency.mjs` — semáforo simples (`Semaphore`), limite padrão de 4 processos simultâneos (ajustável via `CONTREEX_MAX_CONCURRENT_AGENTS`), instância compartilhada por padrão (`defaultSemaphore`) já que o risco real é de processos demais no sistema, não por `AgentManager`
+- [x] `AgentManager.run()` usa o semáforo só pra proteger o spawn de processo de verdade (`plugin.execute()`), não a criação de worktree nem o lookup de cache
+- [x] Fila/prioridade/execução distribuída continuam fora de escopo — não existe ainda mais de um pipeline rodando ao mesmo tempo de verdade que justifique
+- [x] 5 testes (`scripts/unit-test-concurrency.mjs`), incluindo um que exercita o `AgentManager.run()` real (só `plugin.execute()` é falso) com 5 tarefas e limite 2, confirmando que nunca mais de 2 rodam ao mesmo tempo
 
 ### 14. Ação `implement` real (ainda não existe)
 **Correção importante em 2026-07-12**: a Fase 6 do Intent Analyzer originalmente tentou usar "pular o `refine`" como proxy pra "não implementar sem pedir" — estava errado. `refine` nunca mexe em código, é só o implementer sintetizando o feedback dos revisores em texto/JSON; por isso agora **toda** intenção (analyze/plan/review-code/implement) roda `analyze → review → refine` completo, sempre, pra uma resposta rica. O que realmente precisa de proteção é a futura ação que escreve código de verdade — que ainda não existe em `src/actions/`.
