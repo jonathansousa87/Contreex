@@ -185,10 +185,27 @@ Deliberately keyed on the prompt text, not the worktree `cwd` (a meaningless ran
 `scripts/token-economy-report.mjs` measures what actually saves tokens/cost today, following the same "no decorative metrics" rule as ROADMAP.md item 7. Run it yourself; here's what it found (2026-07-12, this environment):
 
 - **Cache is the only proven real saving.** A repeated identical call: first run cost `$0.058` (Claude), second run — a cache hit — cost `$0` and used zero additional tokens. Confirmed with `meta.tokens`/`meta.costUsd` now captured from the raw CLI output (`claude-agent.mjs`, `codex-agent.mjs`).
-- **RTK compression (`compress.mjs`) has zero consumers anywhere in the live pipeline** — confirmed by grepping for its exports outside its own file and the Phase 6/token-economy demo scripts. It's proven in isolation (99.3% smaller, see Phase 6) but delivers 0% real savings today because nothing calls it during an actual run.
 - **The Prompt Optimizer is a complete no-op without `OPENROUTER_API_KEY`** — verified directly: `optimize()` returned input and output as byte-identical strings. In this environment it costs nothing and saves nothing, because it doesn't run at all. Its real effect on token count (could plausibly increase it — "clarifying" a prompt is not the same as shortening it) has never been measured with a real key.
 - **The Context Engine's own overhead is genuinely small**: a real `gather()` call returned 618 characters of context that became a 621-character final prompt — 3 characters of formatting overhead.
 - **Unexpected finding**: comparing real token usage for the same task, Codex reported 37,175 input tokens against Claude's 6 "new" input tokens (with 64,514 absorbed by Anthropic's own prompt cache). The dominant cost driver per call is each CLI's own baseline overhead (system prompt, tool definitions) — something Contreex's context/compression work does not and cannot control, since it's internal to each wrapped CLI.
+
+#### RTK and pxpipe — actually investigated (2026-07-12), not assumed
+
+Both were named as token-economy inspiration in the very first message of this whole project, and neither was actually looked at until the user pointed out — correctly — that `compress.mjs` called itself "RTK-inspired" without the author ever having read the real project. That was a mistake; corrected by cloning both and testing for real.
+
+**RTK** (`github.com/rtk-ai/rtk`) is a Rust CLI proxy that compacts common dev command output (`git diff`, test runners, `grep`, ...) before it reaches an LLM's context, and it already supports being hooked into the exact CLIs this project orchestrates (`rtk init -g --codex`, `rtk init -g --agent antigravity`). Installed the real binary and tested it directly against this repo:
+
+| test | raw | rtk | note |
+|---|---:|---:|---|
+| `npm test` output (passing) | 1,802 B | 304 B | real, valid — shows a compact tail, not hidden failures |
+| `npm test` output (deliberately broken) | — | — | correctly showed `SOME TESTS FAILED` in the tail, full log preserved on disk |
+| `grep -r "export" src/` | 4,355 B | 4,354 B | no meaningful savings — this codebase's grep output was already dense, nothing to strip |
+| `git diff`, small realistic change (2 lines) | 274 B | 260 B | complete, no data loss, modest savings from header replacement |
+| `git diff`, large change (100 lines) | 7,321 B | 3,844 B | **looked like a 48% win — turned out to be lossy**: RTK's default caps each hunk at 100 shown lines and silently dropped every single `+` line past that cap, replacing them with `"... (100 lines truncated)"` |
+
+The large-diff result mattered: RTK's real default behavior does lose real content above its truncation threshold, recoverable only via an explicit `--no-compact` flag the caller has to know to ask for. Decision: **do not depend on the `rtk` binary** (the user's explicit preference — a project dependency on an external system tool), but the underlying *technique* (strip diff metadata/header boilerplate) is legitimate and safe below that threshold. `src/compress.mjs`'s `condenseDiff()` reimplements the safe part in plain JS and — deliberately, unlike RTK's own default — never truncates a `+`/`-` line at any diff size, trading some compaction ratio for the correctness guarantee this project actually needs. `expandDiff()` now uses it; a real 100-line change in this repo compacts by only ~3% with this safer approach (vs. RTK's lossy 48%), because most of RTK's number came specifically from the truncation this project's version refuses to do.
+
+**pxpipe** (`github.com/teamchong/pxpipe`) renders bulky context as PNG images for a vision-language model to read — cheaper per-token than dense text, per its own measurements (~68% savings on real traffic). Its own `FINDINGS.md` is unusually candid about why this is risky: a VLM reading an image is not OCR — there's no confidence signal, so misreads are silent and confident rather than visibly garbled, and *exact byte-level content* (hashes, ids, paths) is precisely the content type that fails while prose reads fine. Their own measurements show this is highly model-dependent (one model: 10% exact-match on hex ids at production density; another: 13/15; others: 0/15 to 0/4) — every model needs its own extensive validation before it's considered safe, and most of the models they tested failed that bar. Contreex orchestrates four heterogeneous agent CLIs, and the AEP protocol's entire value proposition depends on JSON surviving byte-exact — the precise worst case for this technique. **Not adopted.**
 
 Honest summary: today, "this product saves tokens" is true in exactly one situation (repeated identical calls, via cache) and not yet true anywhere else the architecture claims to help.
 
