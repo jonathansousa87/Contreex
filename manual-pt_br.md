@@ -20,7 +20,7 @@ Um orquestrador de linha de comando: um agente (**implementer**) analisa, planej
 ## 2. Instalação
 
 ```sh
-git clone <url-do-repositorio> ~/Contreex
+git clone git@github.com:jonathansousa87/Contreex.git ~/Contreex
 cd ~/Contreex
 npm install
 ```
