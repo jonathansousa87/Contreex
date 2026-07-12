@@ -127,11 +127,13 @@ Diferente de Decision Memory (Fase 7): aquilo é estatística de execução, iss
 - [x] Conectado ao Context Engine — `analyze` e `review` agora recebem lições relevantes da Knowledge Base junto com tarefas parecidas da Decision Memory
 - [x] 6 testes (`scripts/unit-test-knowledge-base.mjs`), incluindo injeção de dependência (`knowledgeLookup` customizável) e confirmação de que entradas de teste não vazam pra correspondências irrelevantes
 
-### 10. Consensus Engine
-Hoje "refine" é uma chamada única do implementer decidindo tudo via prompt — funciona, mas não é uma estratégia, é um comportamento fixo.
-- [ ] Desacoplar do step `refine` atual
-- [ ] Estratégias plugáveis: unanimidade, maioria, implementer decide, weighted, corporate policy
-- [ ] Provavelmente vira um step-type novo dentro do pipeline declarativo (item 4), não um módulo isolado
+### 10. Consensus Engine ✅ concluído — 2026-07-12
+`refine` continua existindo e fazendo sua própria síntese via LLM — o Consensus Engine é um gate determinístico **adicional**, opcional, que roda antes disso sem custo de LLM.
+- [x] `src/consensus.mjs` — desacoplado do `refine`, computação pura sobre `doc.reviews`
+- [x] Estratégias plugáveis: `unanimity`, `majority`, `implementerDecides` (não computa nada, delega mesmo pro refine), `weighted` (usa `agentStats()` da Decision Memory pra pesar cada revisor pela taxa histórica de aprovação), `corporatePolicy` (indireção configurável pra outra estratégia, default `unanimity`)
+- [x] Virou um novo step-type declarativo (`src/actions/consensus.mjs`, registrado em `actions/registry.mjs`) com `local: true` — `orchestrator.mjs` pula o `AgentManager`/worktree/LLM inteiramente pra esse tipo de step, mas ainda emite pelo mesmo Event Bus (`agent: 'contreex'` nos logs, pra diferenciar de chamada real)
+- [x] AEP ganhou seção `consensus: {strategy, verdict, rationale}` no schema
+- [x] 10 testes unitários (`scripts/unit-test-consensus.mjs`, todos sem custo de API — é computação pura) + demo real (`scripts/demo-consensus.mjs`) confirmando o step local funcionando dentro de um pipeline de verdade (`analyze → review → consensus → refine`), com o log corretamente distinguindo `consensus (contreex)` de chamadas de agente reais
 
 ### 11. MCP como Capability
 Evolução do `src/mcp-gateway.mjs` existente, não reescrita — ele já filtra por workspace, falta formalizar a indireção.

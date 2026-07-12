@@ -22,6 +22,7 @@ This document explains what Contreex is built from, why each piece exists, and �
 - [Terminal report](#terminal-report)
 - [Event Bus](#event-bus)
 - [Knowledge Base](#knowledge-base)
+- [Consensus Engine](#consensus-engine)
 - [Findings and gotchas per CLI](#findings-and-gotchas-per-cli)
 - [Development log](#development-log)
 
@@ -267,6 +268,12 @@ A second, related addition shipped alongside this: the `analyze` action's `analy
 ## Knowledge Base
 
 Distinct from the Memory Engine above: Decision Memory is per-run statistics ("this run's verdict was APPROVE"), the Knowledge Base is durable, curated lessons that stay true across many runs ("Codex tends to miss async concurrency bugs"). `src/knowledge-base.mjs` — `addEntry({text, tags})`/`listEntries()`/`queryKnowledgeBase(text)`, stored at `~/.contreex/knowledge-base.jsonl`, using the same token-overlap similarity as `memory/query.mjs`'s `findSimilarRuns` rather than inventing a second technique. Promotion is deliberately manual for v1 — `addEntry()` is the real path; `suggestPromotions()` only surfaces candidates (agents with recurring findings across recorded runs) for a human to confirm, not an autonomous pipeline. Wired into the Context Engine: `analyze` and `review` steps both get relevant Knowledge Base entries alongside similar past tasks from Decision Memory.
+
+## Consensus Engine
+
+`refine` still exists and still does its own LLM-based synthesis — the Consensus Engine (`src/consensus.mjs`) is an additional, optional, deterministic gate a pipeline can run before it, at zero LLM cost, since it's pure computation over `doc.reviews`. Five strategies: `unanimity` (default — any `BLOCKED` wins, otherwise every reviewer must `APPROVE`), `majority`, `implementerDecides` (computes nothing, exists so a pipeline can name "no independent gate" explicitly), `weighted` (weighs each reviewer's vote by its historical approve rate from `agentStats()` — Decision Memory feeding back into how much a given agent's opinion counts), and `corporatePolicy` (a named indirection to another strategy, configurable per workspace, default `unanimity`).
+
+Implemented as a new declarative action (`src/actions/consensus.mjs`, `{ local: true, compute, merge }`) rather than a bolt-on module — a pipeline includes it like any other step (`{ action: 'consensus', strategy: 'majority' }`, no `role`). `orchestrator.mjs`'s `runStep` checks `action.local` and, for these, skips `AgentManager`/worktree creation/any LLM call entirely, computing synchronously and still emitting through the same event bus (`agent: 'contreex'` in the resulting log line, to distinguish it from a real CLI call). AEP gained a `consensus: {strategy, verdict, rationale}` section. Verified with a real pipeline run (`analyze → review → consensus → refine`): the computed verdict matched the real reviewer's actual verdict, and the log line correctly read `consensus (contreex) ran action 'consensus' — ok`.
 
 ## Findings and gotchas per CLI
 

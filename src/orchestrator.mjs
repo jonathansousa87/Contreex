@@ -101,6 +101,22 @@ function distillForMemory(doc, roles) {
 
 async function runStep(step, doc, roles, manager, projectDir, contextEngine) {
   const action = resolveAction(step.action);
+
+  // Local actions (e.g. "consensus") are pure computation — no agent call,
+  // no worktree, no LLM cost. Still routed through the same event bus as
+  // everything else, so the log listener and any external observer see it
+  // exactly like any other step.
+  if (action.local) {
+    let result;
+    try {
+      result = { ok: true, data: action.compute(doc, step) };
+    } catch (e) {
+      result = { ok: false, error: e.message };
+    }
+    manager.eventBus.emit(EVENTS.AFTER_AGENT_RUN, { agent: 'contreex', role: step.role ?? step.action, action: step.action, ok: result.ok, error: result.error });
+    return { step, action, result };
+  }
+
   const plugin = roles[step.role];
   if (!plugin) throw new Error(`No provider configured for role '${step.role}'`);
 
